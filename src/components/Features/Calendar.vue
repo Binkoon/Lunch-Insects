@@ -1,174 +1,196 @@
 <template>
-  <div class="calendar-container">
-    <!-- 헤더: 이전 주, 현재 주차, 다음 주 -->
-    <div class="calendar-header">
-      <button class="nav-btn" @click="prevWeek">◀</button>
-      <h2>{{ currentYear }}년 {{ weekNumber }}W</h2>
-      <button class="nav-btn" @click="nextWeek">▶</button>
-    </div>
-
-    <!-- 요일 표시 -->
-    <div class="calendar-weekdays">
-      <div v-for="(day, index) in weekdays" :key="index" class="weekday">
-        {{ day }}
+    <div class="calendar-container">
+      <!-- 헤더 -->
+      <div class="calendar-header">
+        <button class="nav-btn" @click="prevWeek">◀</button>
+        <h2>{{ currentYear }}년 {{ weekNumber }}W</h2>
+        <button class="nav-btn" @click="nextWeek">▶</button>
       </div>
-    </div>
-
-    <!-- 주간 일정 (버튼 클릭 시 모달 호출) -->
-    <div class="calendar-week">
-      <button v-for="(day, index) in daysInWeek" :key="index"
-              class="day-btn"
-              :class="{'saturday-day': isSaturday(day), 'sunday-day': isSunday(day), 'holiday-day': isHoliday(day)}"
-              @click="day ? openModal(day) : null">
-        
-        <template v-if="day">
-          <span class="day-number">{{ day.day }}</span>
-          <div v-if="day.holiday" class="holiday">{{ day.holiday }}</div>
-          <div class="event-container">
-            <div v-for="event in day.events" :key="event.id" 
-                 class="event" 
-                 :class="{'no-event-bg': event.type === 'no-event'}">
-              {{ event.title }} ({{ event.user }})
-              <button class="delete-btn" @click.stop="deleteEvent(day.date, event.id)">✕</button>
+  
+      <!-- 요일 표시 -->
+      <div class="calendar-weekdays">
+        <div v-for="(day, index) in weekdays" :key="index" class="weekday">
+          {{ day }}
+        </div>
+      </div>
+  
+      <!-- 주간 일정 -->
+      <div class="calendar-week">
+        <button v-for="(day, index) in daysInWeek" :key="index"
+                class="day-btn"
+                :class="{'saturday-day': isSaturday(day), 'sunday-day': isSunday(day), 'holiday-day': isHoliday(day)}"
+                @click="day ? openModal(day.date) : null">
+          
+          <template v-if="day">
+            <span class="day-number">{{ day.day }}</span>
+            <div v-if="day.holiday" class="holiday">{{ day.holiday }}</div>
+            <div class="event-container">
+              <!-- 🔥 Firestore에서 가져온 일정 표시 -->
+              <div v-for="event in getEventsForDate(day.date)" :key="event.id" 
+                   class="event" 
+                   :class="{'no-event-bg': event.type === 'no-event'}">
+                {{ event.reason || "이벤트 없음" }} ({{ event.userId || "알 수 없음" }})
+                <button class="delete-btn" @click.stop="deleteEvent(day.date, event.id)">✕</button>
+              </div>
             </div>
-          </div>
-        </template>
-      </button>
+          </template>
+        </button>
+      </div>
+      
+      <!-- 일정 추가 모달 -->
+      <CommonModal 
+        :show="showModal" 
+        title="일정 추가" 
+        @close="closeModal" 
+        @submit="submitEvent"
+        :eventData="newEvent"
+      />
     </div>
-
-    <!-- 일정 추가 모달 -->
-    <CommonModal 
-      :show="showModal" 
-      title="일정 추가" 
-      @close="closeModal" 
-      @submit="addEvent" 
-      :eventData="newEvent" 
-    />
-  </div>
-</template>
-
-
-<script>
-import CommonModal from "@/components/Common/Modal.vue";
-import { getHolidays } from "@/utils/holidayApi";
-
-export default {
-  components: { CommonModal },
-  data() {
-    return {
-      currentYear: new Date().getFullYear(),
-      currentWeek: this.getCurrentWeek(),
-      showModal: false,
-      selectedDate: null,
-      newEvent: { title: "", user: "", date: null, type: "" },
-      events: [],
-      holidays: {},
-      weekdays: ["일", "월", "화", "수", "목", "금", "토"], // ✅ 요일 고정
-    };
-  },
-  computed: {
-    weekNumber() {
-      const firstJan = new Date(this.currentYear, 0, 1);
-      const firstWeekStart = firstJan.getDate() - firstJan.getDay();
-      const currentDate = new Date(this.currentYear, 0, this.currentWeek * 7);
-      const diffDays = Math.floor((currentDate - firstJan) / (1000 * 60 * 60 * 24));
-      return Math.ceil((diffDays + firstWeekStart) / 7);
+  </template>
+  
+  <script>
+  import CommonModal from "@/components/Common/Modal.vue";
+  import { getHolidays } from "@/utils/holidayApi";
+  
+  export default {
+    components: { CommonModal },
+    props: {
+      showModal: Boolean, 
+      events: Array, 
+      preferences: Array, 
     },
-    daysInWeek() {
-      const firstDayOfYear = new Date(this.currentYear, 0, 1);
-      const days = [];
-      const startOfWeek = new Date(firstDayOfYear);
-      startOfWeek.setDate(firstDayOfYear.getDate() + (this.currentWeek - 1) * 7 - startOfWeek.getDay());
-
-      for (let i = 0; i < 7; i++) {
-        const currentDate = new Date(startOfWeek);
-        currentDate.setDate(startOfWeek.getDate() + i);
-        const dateString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
-
-        days.push({
-          date: dateString,
-          day: currentDate.getDate(),
-          holiday: this.holidays[dateString] || "",
-          events: this.events.filter(event => event.date === dateString),
-        });
+    data() {
+      return {
+        currentYear: new Date().getFullYear(),
+        currentWeek: this.getCurrentWeek(),
+        selectedDate: null,
+        newEvent: { reason: "", userId: "", date: null, type: "" },
+        holidays: {},
+        weekdays: ["일", "월", "화", "수", "목", "금", "토"],
+      };
+    },
+    computed: {
+      weekNumber() {
+        const firstJan = new Date(this.currentYear, 0, 1);
+        const firstWeekStart = firstJan.getDate() - firstJan.getDay();
+        const currentDate = new Date(this.currentYear, 0, this.currentWeek * 7);
+        const diffDays = Math.floor((currentDate - firstJan) / (1000 * 60 * 60 * 24));
+        return Math.ceil((diffDays + firstWeekStart) / 7);
+      },
+      daysInWeek() {
+        const firstDayOfYear = new Date(this.currentYear, 0, 1);
+        const days = [];
+        const startOfWeek = new Date(firstDayOfYear);
+        startOfWeek.setDate(firstDayOfYear.getDate() + (this.currentWeek - 1) * 7 - startOfWeek.getDay());
+  
+        for (let i = 0; i < 7; i++) {
+          const currentDate = new Date(startOfWeek);
+          currentDate.setDate(startOfWeek.getDate() + i);
+          const dateString = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
+  
+          days.push({
+            date: dateString,
+            day: currentDate.getDate(),
+            holiday: this.holidays[dateString] || "",
+          });
+        }
+        return days;
       }
-      return days;
     },
-  },
-  methods: {
-    async fetchHolidays() {
-      this.holidays = await getHolidays(this.currentYear);
+    watch: {
+      events: {
+        handler() {
+          this.$forceUpdate();
+        },
+        deep: true,
+      },
+      preferences: {
+        handler() {
+          this.$forceUpdate();
+        },
+        deep: true,
+      },
     },
-    getCurrentWeek() {
-      const today = new Date();
-      const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
-      return Math.ceil(((today - firstDayOfYear) / (1000 * 60 * 60 * 24) + firstDayOfYear.getDay()) / 7);
+    methods: {
+      async fetchHolidays() {
+        this.holidays = await getHolidays(this.currentYear);
+      },
+      getCurrentWeek() {
+        const today = new Date();
+        const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+        return Math.ceil(((today - firstDayOfYear) / (1000 * 60 * 60 * 24) + firstDayOfYear.getDay()) / 7);
+      },
+      prevWeek() {
+        if (this.currentWeek === 1) {
+          this.currentYear--;
+          this.currentWeek = 52;
+        } else {
+          this.currentWeek--;
+        }
+        this.fetchHolidays();
+      },
+      nextWeek() {
+        if (this.currentWeek >= 52) {
+          this.currentYear++;
+          this.currentWeek = 1;
+        } else {
+          this.currentWeek++;
+        }
+        this.fetchHolidays();
+      },
+      openModal(date) {
+        this.selectedDate = date;
+        this.newEvent = { reason: "", userId: "", date, type: "" };
+        this.$emit("open-modal", date);
+      },
+      closeModal() {
+        this.$emit("close-modal");
+      },
+      submitEvent(eventData) {
+        this.$emit("add-event", eventData);
+      },
+      /** 🔥 Firestore에서 가져온 데이터를 날짜별로 정리 */
+      getEventsForDate(date) {
+        console.log(`📌 이벤트 필터링 중: ${date}`, this.events);
+  
+        const scheduleEvents = this.events
+          .filter(event => event.date === date)
+          .map(event => ({
+            ...event,
+            reason: event.reason || "일정 없음",
+            userId: event.userId || "알 수 없음",
+            type: "schedule"
+          }));
+  
+        const preferenceEvents = this.preferences
+          .filter(preference => preference.date === date)
+          .map(preference => ({ 
+            id: preference.id,
+            reason: preference.restaurants.join(", "),
+            userId: preference.participants.join(", "),
+            type: "no-event"
+          }));
+  
+        return [...scheduleEvents, ...preferenceEvents];
+      },
+      deleteEvent(date, eventId) {
+        this.$emit("delete-event", date, eventId);
+      },
+      isSaturday(day) {
+        return day && new Date(day.date).getDay() === 6;
+      },
+      isSunday(day) {
+        return day && new Date(day.date).getDay() === 0;
+      },
+      isHoliday(day) {
+        return day && day.holiday;
+      },
     },
-    prevWeek() {
-      if (this.currentWeek === 1) {
-        this.currentYear--;
-        this.currentWeek = 52;
-      } else {
-        this.currentWeek--;
-      }
+    mounted() {
       this.fetchHolidays();
     },
-    nextWeek() {
-      if (this.currentWeek >= 52) {
-        this.currentYear++;
-        this.currentWeek = 1;
-      } else {
-        this.currentWeek++;
-      }
-      this.fetchHolidays();
-    },
-    openModal(day) {
-      this.selectedDate = day.date;
-      this.newEvent = { title: "", user: "", date: day.date, type: "" };
-      this.showModal = true;
-    },
-    closeModal() {
-      this.showModal = false;
-    },
-    addEvent(eventData) {
-      if (!eventData.title || !eventData.user) {
-        return;
-      }
-
-      const isDuplicate = this.events.some(event => 
-        event.date === eventData.date && event.title === eventData.title
-      );
-
-      if (!isDuplicate) {
-        this.events.push({
-          id: Date.now(),
-          date: eventData.date,
-          title: eventData.title,
-          user: eventData.user,
-          type: eventData.type, // ✅ no-event 여부 저장
-        });
-      }
-
-      this.closeModal();
-    },
-    deleteEvent(date, eventId) {
-      this.events = this.events.filter(event => !(event.date === date && event.id === eventId));
-    },
-    isSaturday(day) {
-      return day && new Date(day.date).getDay() === 6;
-    },
-    isSunday(day) {
-      return day && new Date(day.date).getDay() === 0;
-    },
-    isHoliday(day) {
-      return day && day.holiday;
-    },
-  },
-  mounted() {
-    this.fetchHolidays();
-  },
-};
-</script>
+  };
+  </script>
   
   <style scoped>
 .calendar-container {

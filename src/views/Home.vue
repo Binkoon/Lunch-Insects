@@ -1,117 +1,157 @@
 <template>
-  <div class="layout-container">
-    <!-- 헤더 -->
-    <div class="top-nav">
-      <TopNav />
-    </div>
-
-    <!-- 주간 캘린더 & 지도 컨테이너 -->
-    <div class="content-container">
-      <!-- 주간 캘린더 -->
-      <div class="calendar-section">
-        <Calendar 
-          :showModal="showModal" 
-          @open-modal="openModal"
-          @close-modal="closeModal"
-          @add-event="addEvent"
-          :newEvent="newEvent"
-        />
+    <div class="layout-container">
+      <!-- 헤더 -->
+      <div class="top-nav">
+        <TopNav />
       </div>
-
-      <!-- 지도 -->
-      <div class="map-section">
-        <Map />
+  
+      <div class="content-container">
+        <!-- 주간 캘린더 -->
+        <div class="calendar-section">
+          <Calendar 
+            :showModal="showModal" 
+            @open-modal="openModal"
+            @close-modal="closeModal"
+            @add-event="addEvent"
+            :events="events" 
+            :preferences="preferences"
+          />
+        </div>
+  
+        <!-- 지도 -->
+        <div class="map-section">
+          <Map />
+        </div>
       </div>
-    </div>
-  </div>
-</template>
-
-<script>
-import Calendar from "/src/components/Features/Calendar.vue";
-import Map from "/src/components/Features/Map.vue";
-import TopNav from "/src/components/Common/TopNav.vue";
-
-export default {
-  components: {
-    Calendar,
-    Map,
-    TopNav,
-  },
-  data() {
-    return {
-      showModal: false,
-      newEvent: { title: "", user: "" },
-    };
-  },
-  methods: {
-    openModal() {
-      this.showModal = true;
+    </div> 
+  </template>
+  
+  <script>
+  import Calendar from "@/components/Features/Calendar.vue";
+  import TopNav from "@/components/Common/TopNav.vue";
+  import Map from "@/components/Features/Map.vue"; // ✅ 지도 컴포넌트 추가
+  import { getAllSchedules, addSchedule } from "@/firebase/firebaseDB"; 
+  
+  export default {
+    components: {
+      Calendar,
+      TopNav,
+      Map, // ✅ Map 추가
     },
-    closeModal() {
-      this.showModal = false;
-      this.newEvent = { title: "", user: "" };
+    data() {
+      return {
+        showModal: false,
+        selectedDate: "",
+        events: [], // ✅ 모든 일정을 저장할 배열
+        preferences: [] // ✅ 희망 음식점 데이터 (필요 시 활용)
+      };
     },
-    addEvent(eventData) {
-      console.log("새로운 일정 추가됨:", eventData);
+    methods: {
+      /** ✅ Firestore에서 모든 일정 불러오기 */
+      async fetchAllEvents() {
+        console.log("📌 Firestore에서 전체 일정 불러오는 중...");
+  
+        this.events = await getAllSchedules();
+        console.log("📌 가져온 일정 데이터:", this.events);
+  
+        this.$forceUpdate(); // 🔥 UI 강제 업데이트
+      },
+  
+      /** ✅ 일정 추가 */
+      async addEvent(eventData) {
+        console.log("📌 새로운 일정 추가 요청:", eventData);
+  
+        if (!eventData.userId || !eventData.reason) {
+          console.error("❌ Firestore 저장 실패: 필수 데이터 누락", eventData);
+          return;
+        }
+  
+        try {
+          let success = await addSchedule(
+            eventData.userId,  
+            eventData.date,    
+            eventData.reason,  
+            [eventData.userId] 
+          );
+  
+          if (success) {
+            console.log("✅ Firestore 저장 성공! 모든 일정 다시 불러옵니다.");
+            await this.fetchAllEvents();
+          } else {
+            console.error("❌ Firestore 저장 실패!");
+          }
+        } catch (error) {
+          console.error("❌ Firestore 저장 중 오류 발생:", error);
+        }
+      },
+  
+      openModal(date) {
+        this.showModal = true;
+        this.selectedDate = date;
+      },
+  
+      closeModal() {
+        this.showModal = false;
+      }
     },
-  },
-};
-</script>
-
-<style scoped>
-/* ✅ 전체 레이아웃 */
-.layout-container {
-  display: flex;
-  flex-direction: column;
-  width: 100vw; /* ✅ 전체 화면을 차지하도록 수정 */
-  gap: 30px;
-  padding: 20px;
-}
-
-/* ✅ 주간 캘린더 & 지도 컨테이너 */
-.content-container {
-  display: flex;
-  flex-direction: row; /* ✅ 가로 정렬 */
-  justify-content: space-between; /* ✅ 양쪽 끝에 배치 */
-  align-items: stretch; /* ✅ 세로 길이 맞춤 */
-  width: 100vw; /* ✅ 화면 전체 너비 */
-  height: auto;
-  gap: 20px; /* ✅ 간격 추가 */
-}
-
-/* ✅ 주간 캘린더 */
-.calendar-section {
-  flex: 1; /* ✅ 50% 공간 차지 */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 450px;
-}
-
-/* ✅ 지도 */
-.map-section {
-  flex: 1; /* ✅ 50% 공간 차지 */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 450px;
-  background: #f9f9f9;
-  border-radius: 10px;
-  padding: 20px;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-}
-
-/* ✅ 반응형: 화면이 작아지면 세로 정렬 */
-@media (max-width: 1024px) {
-  .content-container {
+  
+    async mounted() {
+      await this.fetchAllEvents(); // 🔥 페이지 로드 시 모든 일정 가져오기
+    },
+  };
+  </script>
+  
+  <style scoped>
+  /* ✅ 기존 스타일 유지 */
+  .layout-container {
+    display: flex;
     flex-direction: column;
+    width: 100vw;
+    gap: 30px;
+    padding: 20px;
+  }
+  
+  .content-container {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: stretch;
+    width: 100vw;
+    height: auto;
+    gap: 20px;
+  }
+  
+  .calendar-section {
+    flex: 1;
+    display: flex;
+    justify-content: center;
     align-items: center;
+    min-height: 450px;
   }
-
-  .calendar-section,
+  
+  /* ✅ 지도 컨테이너 스타일 추가 */
   .map-section {
-    max-width: 100%;
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 450px;
+    background: #f9f9f9;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
   }
-}
-
-</style>
+  
+  @media (max-width: 1024px) {
+    .content-container {
+      flex-direction: column;
+      align-items: center;
+    }
+  
+    .calendar-section,
+    .map-section {
+      max-width: 100%;
+    }
+  }
+  </style>
+  
