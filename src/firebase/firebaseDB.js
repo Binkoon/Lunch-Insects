@@ -1,9 +1,9 @@
 // src/firebase/firebaseDB.js
 import { db } from "./firebase";
-import { collection, doc, setDoc, getDocs, deleteDoc, query, where } from "firebase/firestore";
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc } from "firebase/firestore";
 
 /** ✅ Firestore 일정 추가 함수 */
-const addSchedule = async (userId, date, reason, participants) => {
+const addSchedule = async (userId, date, reason, participants = []) => {
   if (!userId || !date) {
     console.error("❌ Firestore 일정 저장 실패: userId 또는 date가 누락됨");
     return false;
@@ -15,7 +15,7 @@ const addSchedule = async (userId, date, reason, participants) => {
       userId,
       date,
       reason,
-      participants,
+      participants, // ✅ 항상 배열 유지
       createdAt: new Date(),
       updatedAt: new Date(),
     }, { merge: true });
@@ -29,8 +29,8 @@ const addSchedule = async (userId, date, reason, participants) => {
 };
 
 /** ✅ Firestore 희망 음식점 추가 함수 */
-const addPreference = async (userId, date, restaurants, participants) => {
-  if (!userId || !date || !restaurants.length) {
+const addPreference = async (userId, date, restaurants = [], participants = []) => {
+  if (!userId || !date || restaurants.length === 0) {
     console.error("❌ Firestore 희망 음식점 저장 실패: 필요한 정보가 누락됨");
     return false;
   }
@@ -40,7 +40,7 @@ const addPreference = async (userId, date, restaurants, participants) => {
     await setDoc(prefRef, {
       userId,
       date,
-      restaurants,
+      restaurants, // ✅ 항상 배열 유지
       participants,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -73,59 +73,50 @@ const getAllSchedules = async () => {
   }
 };
 
-  
-
-/** ✅ 특정 날짜의 희망 음식점 가져오기 */
-const getPreferencesByDate = async (date) => {
-  if (!date) return [];
-
-  try {
-    const preferencesRef = collection(db, "preferences");
-    const q = query(preferencesRef, where("date", "==", date));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-      console.log(`📌 해당 날짜(${date}) 희망 음식점 없음`);
-      return [];
-    }
-
-    let preferences = [];
-    querySnapshot.forEach((doc) => {
-      preferences.push({ id: doc.id, ...doc.data() });
-    });
-
-    console.log(`📌 불러온 희망 음식점(${date}):`, preferences);
-    return preferences;
-  } catch (error) {
-    console.error("❌ 희망 음식점 조회 실패:", error);
-    return [];
-  }
-};
-
 /** ✅ Firestore 일정 삭제 */
 const deleteSchedule = async (docId) => {
-  if (!docId) return false;
+  if (!docId) {
+    console.error("❌ Firestore 삭제 실패: 문서 ID가 없음", docId);
+    return false;
+  }
 
   try {
-    await deleteDoc(doc(db, "schedules", docId));
-    console.log(`✅ 일정 삭제 완료: ${docId}`);
+    console.log(`📌 Firestore 삭제 시도: schedules/${docId}`);
+
+    const scheduleRef = doc(db, "schedules", docId);
+    const scheduleSnap = await getDoc(scheduleRef);
+
+    if (!scheduleSnap.exists()) {
+      console.error("❌ 삭제할 일정이 존재하지 않음 (Firestore)", docId);
+      return false;
+    }
+
+    console.log("✅ Firestore 일정 문서 확인 완료:", scheduleSnap.data());
+
+    await deleteDoc(scheduleRef);
+    console.log(`✅ Firestore 일정 삭제 완료: ${docId}`);
+
     return true;
   } catch (error) {
-    console.error("❌ 일정 삭제 실패:", error);
+    console.error("❌ Firestore 일정 삭제 중 오류 발생:", error);
     return false;
   }
 };
 
-/** ✅ Firestore 희망 음식점 삭제 */
+
+/** ✅ Firestore 희망 음식점 즉시 삭제 */
 const deletePreference = async (docId) => {
-  if (!docId) return false;
+  if (!docId) {
+    console.error("❌ Firestore 삭제 실패: 문서 ID가 없음", docId);
+    return false;
+  }
 
   try {
     await deleteDoc(doc(db, "preferences", docId));
-    console.log(`✅ 희망 음식점 삭제 완료: ${docId}`);
+    console.log(`✅ Firestore 희망 음식점 삭제 완료: ${docId}`);
     return true;
   } catch (error) {
-    console.error("❌ 희망 음식점 삭제 실패:", error);
+    console.error("❌ Firestore 희망 음식점 삭제 실패:", error);
     return false;
   }
 };
@@ -134,7 +125,6 @@ export {
   addSchedule,
   addPreference,
   getAllSchedules,
-  getPreferencesByDate,
   deleteSchedule,
   deletePreference,
 };
