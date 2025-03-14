@@ -151,28 +151,34 @@ export default {
     },
     /** 🔥 Firestore에서 가져온 데이터를 날짜별로 정리 */
     getEventsForDate(date) {
-      console.log(`📌 이벤트 필터링 중: ${date}`, this.events);
+        console.log(`📌 이벤트 필터링 중: ${date}`, this.events);
 
-      const scheduleEvents = this.events
-        .filter(event => event.date === date)
-        .map(event => ({
-          ...event,
-          reason: event.reason || "일정 없음",
-          userId: event.userId || "알 수 없음",
-          type: "schedule"
-        }));
+        const scheduleEvents = this.events
+          .filter(event => event.date === date)
+          .map(event => {
+            console.log(`✅ 일정 데이터 확인 (schedule):`, event); // 🔥 콘솔 추가
+            return {
+              ...event,
+              reason: event.reason || "일정 없음",
+              userId: event.userId || "알 수 없음",
+              type: "schedule"
+            };
+          });
 
-      const preferenceEvents = this.preferences
-        .filter(preference => preference.date === date)
-        .map(preference => ({ 
-          id: preference.id,
-          reason: preference.restaurants.join(", "),
-          userId: preference.participants.join(", "),
-          type: "no-event"
-        }));
+        const preferenceEvents = this.preferences
+          .filter(preference => preference.date === date)
+          .map(preference => {
+            console.log(`✅ 희망 음식점 데이터 확인 (no-event):`, preference); // 🔥 콘솔 추가
+            return { 
+              id: preference.id,
+              reason: preference.restaurants.join(", "),
+              userId: preference.participants.join(", "),
+              type: "no-event" // 🔥 여기에 type 추가!
+            };
+          });
 
-      return [...scheduleEvents, ...preferenceEvents];
-    },
+        return [...scheduleEvents, ...preferenceEvents];
+      },
     deleteEvent(eventId, date, type) {
       console.log("🗑️ 삭제 요청됨:", eventId, date, type);
       this.$emit("delete-event", eventId, date, type);

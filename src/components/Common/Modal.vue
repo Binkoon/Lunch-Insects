@@ -1,7 +1,7 @@
 <template>
   <div v-if="show" class="modal-overlay" @click.self="close">
     <div class="modal-content">
-      <!-- ✅ 선택 화면 -->
+      <!-- ✅ 일정 선택 화면 -->
       <div v-if="showSelection">
         <h2>일정이 있나요?</h2>
         <div class="button-container">
@@ -40,7 +40,7 @@
         </div>
       </div>
 
-      <!-- ✅ 일정이 없는 경우 음식점 & 사용자 선택 -->
+      <!-- ✅ 희망 음식점 선택 -->
       <div v-else>
         <div class="modal-header">
           <h2>희망하는 음식점을 선택하세요</h2>
@@ -48,14 +48,24 @@
         </div>
 
         <div class="modal-body">
-          <!-- ✅ 다중 선택 가능한 음식점 리스트 -->
+          <!-- ✅ 드롭다운 내부에서 다중 선택 -->
           <div class="form-group">
             <label class="form-label">음식점:</label>
-            <div class="checkbox-group">
-              <label v-for="restaurant in restaurantList" :key="restaurant" class="checkbox-label">
-                <input type="checkbox" :value="restaurant" v-model="noEventData.restaurants" @change="limitSelection" />
-                {{ restaurant }}
-              </label>
+            <div class="dropdown">
+              <div class="dropdown-header" @click="toggleDropdown">
+                {{ noEventData.restaurants.length ? noEventData.restaurants.join(', ') : '음식점 선택 (최대 3개)' }}
+              </div>
+              <div v-if="isDropdownOpen" class="dropdown-list">
+                <label v-for="restaurant in restaurantList" :key="restaurant" class="dropdown-item">
+                  <input 
+                    type="checkbox" 
+                    :value="restaurant" 
+                    v-model="noEventData.restaurants" 
+                    @change="limitSelection" 
+                  />
+                  {{ restaurant }}
+                </label>
+              </div>
             </div>
           </div>
 
@@ -97,7 +107,8 @@ export default {
     return {
       showSelection: true,
       hasEvent: false,
-      noEventData: { restaurants: [], userId: "" }, // ✅ 음식점을 배열로 저장, 사용자 필드명 변경
+      isDropdownOpen: false, // ✅ 드롭다운 열림 여부
+      noEventData: { restaurants: [], userId: "" },
       restaurantList: [
         "금성관", "리원", "멘무샤", "맥도날드", "맘스터치", "신의주 부대찌개",
         "콜리그", "왕비집", "26층", "26층 (VIP)", "은앤정 닭갈비", 
@@ -110,11 +121,15 @@ export default {
       this.showSelection = true;
       this.hasEvent = false;
       this.noEventData = { restaurants: [], userId: "" };
+      this.isDropdownOpen = false;
       this.$emit("close");
     },
     selectHasEvent(hasEvent) {
       this.hasEvent = hasEvent;
       this.showSelection = false;
+    },
+    toggleDropdown() {
+      this.isDropdownOpen = !this.isDropdownOpen;
     },
     limitSelection() {
       if (this.noEventData.restaurants.length > 3) {
@@ -153,7 +168,7 @@ export default {
 </script>
 
 <style scoped>
-/* ✅ 스타일 유지 */
+/* ✅ 기존 스타일 유지 + 다중 선택 드롭다운 스타일 추가 */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -219,15 +234,41 @@ export default {
   max-width: 200px;
 }
 
-.button-container {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
+/* ✅ 다중 선택 드롭다운 스타일 */
+/* ✅ 드롭다운 스타일 추가 */
+.dropdown {
+  position: relative;
+  width: 100%;
 }
 
-.modal-btn {
-  padding: 10px 20px;
+.dropdown-header {
+  padding: 10px;
+  border: 1px solid #ddd;
   border-radius: 5px;
-  min-width: 120px;
+  cursor: pointer;
+  background: white;
+  text-align: left;
+}
+
+.dropdown-list {
+  position: absolute;
+  width: 100%;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  max-height: 150px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.dropdown-item input {
+  margin-right: 10px;
 }
 </style>
