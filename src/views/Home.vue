@@ -56,15 +56,28 @@
   
         this.$forceUpdate(); // 🔥 UI 강제 업데이트
       },
+
+      /** ✅ Firestore 일정 삭제 */
+      async deleteEvent(eventId, date) {
+        console.log(`🗑️ Firestore 일정 삭제 요청: eventId=${eventId}, date=${date}`);
+        const success = await deleteSchedule(eventId);
+        if (success) {
+          console.log("✅ Firestore에서 일정 삭제 완료!");
+          await this.fetchAllEvents(); // 🔥 삭제 후 전체 일정 다시 불러오기
+        } else {
+          console.error("❌ Firestore에서 일정 삭제 실패");
+        }
+      },
   
       /** ✅ 일정 추가 */
       async addEvent(eventData) {
         console.log("📌 새로운 일정 추가 요청:", eventData);
   
-        if (!eventData.userId || !eventData.reason) {
-          console.error("❌ Firestore 저장 실패: 필수 데이터 누락", eventData);
-          return;
-        }
+        // 🔍 eventData 구조 확인
+      if (!eventData || typeof eventData !== "object") {
+        console.error("❌ Firestore 저장 실패: eventData가 올바르지 않음", eventData);
+        return;
+      }
   
         try {
           let success = await addSchedule(

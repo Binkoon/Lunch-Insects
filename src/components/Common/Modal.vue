@@ -19,13 +19,14 @@
 
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label">일정 제목:</label>
-            <input v-model="eventData.title" type="text" class="modal-input" placeholder="일정을 입력하세요" />
+            <label class="form-label">일정 사유:</label>
+            <input v-model="eventData.reason" type="text" class="modal-input" placeholder="일정 사유 입력" />
           </div>
 
           <div class="form-group">
             <label class="form-label">사용자:</label>
-            <select v-model="eventData.user" class="modal-select">
+            <select v-model="eventData.userId" class="modal-select">
+              <option value="">-</option>
               <option value="John">John</option>
               <option value="Jack">Jack</option>
               <option value="Jane">Jane</option>
@@ -52,7 +53,7 @@
             <label class="form-label">음식점:</label>
             <div class="checkbox-group">
               <label v-for="restaurant in restaurantList" :key="restaurant" class="checkbox-label">
-                <input type="checkbox" :value="restaurant" v-model="noEventData.restaurant" @change="limitSelection" />
+                <input type="checkbox" :value="restaurant" v-model="noEventData.restaurants" @change="limitSelection" />
                 {{ restaurant }}
               </label>
             </div>
@@ -61,7 +62,7 @@
           <!-- ✅ 사용자 선택 -->
           <div class="form-group">
             <label class="form-label">사용자:</label>
-            <select v-model="noEventData.user" class="modal-select">
+            <select v-model="noEventData.userId" class="modal-select">
               <option value="">-</option>
               <option value="John">John</option>
               <option value="Jack">Jack</option>
@@ -96,7 +97,7 @@ export default {
     return {
       showSelection: true,
       hasEvent: false,
-      noEventData: { restaurant: [], user: "" }, // ✅ 음식점을 배열로 저장
+      noEventData: { restaurants: [], userId: "" }, // ✅ 음식점을 배열로 저장, 사용자 필드명 변경
       restaurantList: [
         "금성관", "리원", "멘무샤", "맥도날드", "맘스터치", "신의주 부대찌개",
         "콜리그", "왕비집", "26층", "26층 (VIP)", "은앤정 닭갈비", 
@@ -108,7 +109,7 @@ export default {
     close() {
       this.showSelection = true;
       this.hasEvent = false;
-      this.noEventData = { restaurant: [], user: "" };
+      this.noEventData = { restaurants: [], userId: "" };
       this.$emit("close");
     },
     selectHasEvent(hasEvent) {
@@ -116,19 +117,32 @@ export default {
       this.showSelection = false;
     },
     limitSelection() {
-      if (this.noEventData.restaurant.length > 3) {
+      if (this.noEventData.restaurants.length > 3) {
         alert("최대 3개의 음식점만 선택할 수 있습니다!");
-        this.noEventData.restaurant.pop(); // 마지막 선택한 값 제거
+        this.noEventData.restaurants.pop(); // 마지막 선택한 값 제거
       }
     },
     submitEvent() {
-      this.$emit("submit", { ...this.eventData, type: "event" });
+      console.log("📌 Modal에서 제출된 데이터:", this.eventData);
+
+      if (!this.eventData || typeof this.eventData !== "object") {
+        console.error("❌ 잘못된 이벤트 데이터 전달됨:", this.eventData);
+        return;
+      }
+
+      this.$emit("submit", {
+        reason: this.eventData.reason, 
+        userId: this.eventData.userId,  
+        date: this.eventData.date,    
+        type: "event",
+      });
+
       this.close();
     },
     submitNoEvent() {
       this.$emit("submit", {
-        title: `${this.noEventData.restaurant.join(", ")}`, // ✅ 쉼표로 구분된 문자열로 저장
-        user: this.noEventData.user,
+        reason: this.noEventData.restaurants.join(", "), 
+        userId: this.noEventData.userId,
         date: this.eventData?.date || new Date().toISOString().split("T")[0],
         type: "no-event",
       });
@@ -139,7 +153,7 @@ export default {
 </script>
 
 <style scoped>
-/* ✅ 모달 전체 스타일 */
+/* ✅ 스타일 유지 */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -161,7 +175,6 @@ export default {
   box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-/* ✅ 모달 헤더 */
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -171,7 +184,7 @@ export default {
 }
 
 .close-button {
-  background: linear-gradient(to right, #ff9800, #ffeb3b); /* 주황 + 노랑 그라데이션 */
+  background: linear-gradient(to right, #ff9800, #ffeb3b);
   border: none;
   padding: 8px 14px;
   border-radius: 5px;
@@ -184,7 +197,6 @@ export default {
   opacity: 0.8;
 }
 
-/* ✅ 가로 정렬된 form-group */
 .form-group {
   display: flex;
   align-items: center;
@@ -192,66 +204,30 @@ export default {
   margin-bottom: 15px;
 }
 
-/* ✅ Label 스타일 */
 .form-label {
   width: 80px;
   font-weight: bold;
   text-align: right;
 }
 
-.modal-input {
+.modal-input, .modal-select {
   flex: 1;
   padding: 8px;
   border: 1px solid #ddd;
   border-radius: 5px;
   font-size: 14px;
-  max-width: 200px; /* ✅ 드롭다운 크기와 동일하게 설정 */
-  height: 38px; /* ✅ 드롭다운 높이와 동일하게 조정 */
-  box-sizing: border-box; /* ✅ 패딩 포함 크기 유지 */
-}
-/* ✅ Dropdown 스타일 */
-.modal-select {
-  flex: 1;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  font-size: 14px;
-  max-width: 200px; /* ✅ 최대 너비 제한 */
+  max-width: 200px;
 }
 
-/* ✅ 버튼 컨테이너 */
 .button-container {
   display: flex;
   justify-content: center;
   gap: 8px;
 }
 
-/* ✅ 등록 버튼 스타일 */
 .modal-btn {
   padding: 10px 20px;
   border-radius: 5px;
   min-width: 120px;
 }
-
-/* 희망 음식점 최대 3개 가능케하는 체크박스 css */
-.checkbox-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-width: 300px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-  cursor: pointer;
-}
-
-.checkbox-label input {
-  transform: scale(1.1);
-  cursor: pointer;
-}
-
 </style>

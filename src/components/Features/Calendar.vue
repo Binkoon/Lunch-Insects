@@ -27,10 +27,10 @@
             <div class="event-container">
               <!-- 🔥 Firestore에서 가져온 일정 표시 -->
               <div v-for="event in getEventsForDate(day.date)" :key="event.id" 
-                   class="event" 
-                   :class="{'no-event-bg': event.type === 'no-event'}">
+                  class="event" 
+                  :class="{'no-event-bg': event.type === 'no-event'}">
                 {{ event.reason || "이벤트 없음" }} ({{ event.userId || "알 수 없음" }})
-                <button class="delete-btn" @click.stop="deleteEvent(day.date, event.id)">✕</button>
+                <button class="delete-btn" @click.stop="deleteEvent(event.id, day.date)">✕</button>
               </div>
             </div>
           </template>
@@ -140,8 +140,9 @@
       },
       openModal(date) {
         this.selectedDate = date;
-        this.newEvent = { reason: "", userId: "", date, type: "" };
-        this.$emit("open-modal", date);
+        this.newEvent = { reason: "", userId: "", date, type: "event" };
+        console.log("📌 생성된 newEvent 데이터:", this.newEvent);
+        this.$emit("open-modal", this.newEvent);
       },
       closeModal() {
         this.$emit("close-modal");
@@ -173,8 +174,9 @@
   
         return [...scheduleEvents, ...preferenceEvents];
       },
-      deleteEvent(date, eventId) {
-        this.$emit("delete-event", date, eventId);
+      deleteEvent(eventId, date) {
+        console.log("🗑️ 캘린더에서 삭제 요청됨:", eventId, date);
+        this.$emit("delete-event", eventId, date);
       },
       isSaturday(day) {
         return day && new Date(day.date).getDay() === 6;
@@ -305,16 +307,17 @@
   font-size: 12px;
 }
 
-/* ✅ 희망 음식점 선택(no-event) 스타일 추가 */
+/* ✅ 일정이 있는 경우 (파란색) */
+.schedule-event {
+  background: rgba(0, 128, 255, 0.1); 
+  color: #007bff;
+}
+
+/* ✅ 일정이 없는 경우 (연두색) */
 .no-event-bg {
-  background: #D4EDDA; /* 연두색 배경 */
-  color: #155724; /* 텍스트 색상 */
+  background: #D4EDDA; 
+  color: #155724;
   border: 1px solid #C3E6CB;
-  padding: 5px 8px;
-  border-radius: 5px;
-  font-size: 14px;
-  display: flex;
-  width: 90%;
 }
   </style>
   
