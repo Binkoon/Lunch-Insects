@@ -9,14 +9,24 @@
     <div class="row-container">
       <div class="calendar-section">
         <Calendar 
-          :showModal="showModal" 
+          :showModal="showModal"
           @open-modal="openModal"
           @close-modal="closeModal"
           @add-event="addEvent"
           @delete-event="deleteEvent"
-          :events="events" 
+          :events="events"
           :preferences="preferences"
         />
+
+        <!-- 📌 캘린더 헤더 우측에 "오늘 뭐 먹었어?" 버튼 배치 -->
+        <div class="calendar-header-btn">
+          <CommonButton 
+            buttonStyle="primary"
+            @click="openMenuCounterModal"
+          >
+            🍽️ 오늘 뭐 먹었어?
+          </CommonButton>
+        </div>
       </div>
 
       <div class="map-section">
@@ -24,103 +34,82 @@
       </div>
     </div>
 
-    <!-- 📌 메뉴 카운터 & 차트 -->
-    <div class="row-container">
-      <div class="menu-counter-section">
-        <MenuCounter />
-      </div>
-
-      <div class="menu-chart-section">
-        <MenuChart />
+    <!-- 📌 🍽️ 메뉴 카운터 모달 (이제 CommonButton과 함께 적용됨) -->
+    <div v-if="showMenuModal" class="menu-modal-overlay" @click.self="closeMenuCounterModal">
+      <div class="menu-modal-content">
+        <button class="close-menu-btn" @click="closeMenuCounterModal">✕</button>
+        <MenuCounter @close="closeMenuCounterModal" />
       </div>
     </div>
-  </div> 
+
+    <!-- 📌 Cooltime 추가 -->
+    <div class="row-container">
+      <div class="cooltime-section">
+        <Cooltime />
+      </div>
+    </div>
+
+    <!-- 📌 차트 (단독 Row) -->
+    <div class="chart-row">
+      <MenuChart />
+    </div>
+  </div>
 </template>
 
 <script>
 import Calendar from "@/components/Features/Calendar.vue";
 import TopNav from "@/components/Common/TopNav.vue";
-import Map from "@/components/Features/Map.vue"; // ✅ 지도 컴포넌트 추가
-import { getAllSchedules, addSchedule, deleteSchedule, deletePreference } from "@/firebase/firebaseDB"; 
+import Map from "@/components/Features/Map.vue";
+import { getAllSchedules, addSchedule, deleteSchedule, deletePreference } from "@/firebase/firebaseDB";
 import MenuCounter from "@/components/Features/MenuCounter.vue";
 import MenuChart from "@/components/Features/MenuChart.vue";
+import Cooltime from "@/components/Features/Cooltime.vue";
+
+import CommonButton from "@/components/Common/Button.vue"; // ✅ 공통 버튼 추가
 
 export default {
   components: {
     Calendar,
     TopNav,
-    Map, // ✅ Map 추가
+    Map,
     MenuCounter,
     MenuChart,
+    Cooltime,
+    CommonButton, // ✅ 버튼 추가
   },
   data() {
     return {
-      showModal: false,
+      showModal: false, // ✅ 일정 추가 모달 (이건 건드리지 않음)
+      showMenuModal: false, // ✅ 메뉴 카운터 모달
       selectedDate: "",
-      events: [], // ✅ 모든 일정을 저장할 배열
-      preferences: [] // ✅ 희망 음식점 데이터 (필요 시 활용)
+      events: [],
+      preferences: [],
     };
   },
   methods: {
-    /** ✅ Firestore에서 모든 일정 불러오기 */
     async fetchAllEvents() {
-      console.log("📌 Firestore에서 전체 일정 불러오는 중...");
       this.events = await getAllSchedules();
-      console.log("📌 가져온 일정 데이터:", this.events);
-      this.$forceUpdate(); // 🔥 UI 강제 업데이트
+      this.$forceUpdate();
     },
 
-    /** ✅ Firestore 일정 삭제 */
     async deleteEvent(eventId, date, type) {
-      console.log("🗑️ 삭제 요청됨 - eventId:", eventId, "date:", date, "type:", type);
+      let success = false;
+      if (type === "schedule") {
+        success = await deleteSchedule(eventId);
+      } else if (type === "no-event") {
+        success = await deletePreference(eventId);
+      }
 
-      try {
-        let success = false;
-
-        if (type === "schedule") {
-          console.log("📌 Firestore deleteSchedule 호출!", eventId); // 🔥 삭제 함수 호출 확인
-          success = await deleteSchedule(eventId); // ✅ 일정 삭제 함수 호출
-        } else if (type === "no-event") {
-          console.log("📌 Firestore deletePreference 호출!", eventId); // 🔥 삭제 함수 호출 확인
-          success = await deletePreference(eventId); // ✅ 희망 음식점 삭제 함수 호출
-        }
-
-        if (success) {
-          console.log("✅ Firestore 삭제 성공! 모든 일정 다시 불러옵니다.");
-          await this.fetchAllEvents();
-        } else {
-          console.error("❌ Firestore 삭제 실패!");
-        }
-      } catch (error) {
-        console.error("❌ Firestore 삭제 중 오류 발생:", error);
+      if (success) {
+        await this.fetchAllEvents();
       }
     },
 
-    /** ✅ 일정 추가 */
     async addEvent(eventData) {
-      console.log("📌 새로운 일정 추가 요청:", eventData);
+      let success = await addSchedule(eventData.userId, eventData.date, eventData.reason, [eventData.userId]);
 
-      if (!eventData || typeof eventData !== "object") {
-        console.error("❌ Firestore 저장 실패: eventData가 올바르지 않음", eventData);
-        return;
-      }
-
-      try {
-        let success = await addSchedule(
-          eventData.userId,  
-          eventData.date,    
-          eventData.reason,  
-          [eventData.userId] 
-        );
-
-        if (success) {
-          console.log("✅ Firestore 저장 성공! 모든 일정 다시 불러옵니다.");
-          await this.fetchAllEvents();
-        } else {
-          console.error("❌ Firestore 저장 실패!");
-        }
-      } catch (error) {
-        console.error("❌ Firestore 저장 중 오류 발생:", error);
+      if (success) {
+        await this.fetchAllEvents();
       }
     },
 
@@ -131,15 +120,27 @@ export default {
 
     closeModal() {
       this.showModal = false;
-    }
+    },
+
+    // ✅ "오늘 뭐 먹었어?" 클릭 시 실행
+    openMenuCounterModal() {
+      console.log("✅ MenuCounter 모달 열림");
+      this.showMenuModal = true;
+    },
+
+    // ✅ 모달 닫기
+    closeMenuCounterModal() {
+      console.log("❌ MenuCounter 모달 닫힘");
+      this.showMenuModal = false;
+    },
   },
 
   async mounted() {
-    await this.fetchAllEvents(); // 🔥 페이지 로드 시 모든 일정 가져오기
+    await this.fetchAllEvents();
   },
 };
 </script>
-  
+
 <style scoped>
 /* ✅ 전체 레이아웃 */
 .layout-container {
@@ -151,29 +152,29 @@ export default {
   justify-content: center;
 }
 
-/* ✅ 헤더 배경 이미지 100% */
+/* ✅ 헤더 */
 .top-nav {
   width: 100%;
 }
 
-/* ✅ 2개의 row (캘린더+지도 / 카운터+차트) */
+/* ✅ 캘린더 & 지도 Row */
 .row-container {
   display: flex;
   flex-direction: row;
   width: 100%;
-  /* max-width: 1400px; */
   gap: 10px;
   margin-top: 20px;
   margin-bottom: 20px;
 }
 
-/* ✅ 첫 번째 row (캘린더 60% / 지도 40%) */
+/* ✅ 캘린더 60% / 지도 40% */
 .calendar-section {
   flex: 6;
   display: flex;
   justify-content: center;
   align-items: center;
   width: 100%;
+  position: relative; /* 🔥 버튼 위치 조정 */
 }
 
 .map-section {
@@ -184,8 +185,8 @@ export default {
   width: 100%;
 }
 
-/* ✅ 두 번째 row (카운터 50% / 차트 50%) */
-.menu-counter-section {
+/* ✅ Cooltime 단독 Row */
+.cooltime-section {
   flex: 1;
   display: flex;
   justify-content: center;
@@ -193,26 +194,76 @@ export default {
   width: 100%;
 }
 
-.menu-chart-section {
-  flex: 1;
+/* ✅ 차트 단독 Row */
+.chart-row {
+  width: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%;
+  margin-top: 20px;
 }
 
-/* 📌 반응형 적용 */
+/* ✅ "오늘 뭐 먹었어?" 버튼 (캘린더 헤더 우측) */
+.calendar-header-btn {
+  position: absolute;
+  top: 10px;
+  right: 20px;
+}
+
+/* ✅ 메뉴 카운터 모달 스타일 */
+.menu-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.menu-modal-content {
+  background: white;
+  width: 420px;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 4px 4px 12px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+/* ✅ 모달 닫기 버튼 */
+.close-menu-btn {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  background: red;
+  color: white;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.close-menu-btn:hover {
+  background: darkred;
+}
+
+/* 📌 반응형 */
 @media (max-width: 1024px) {
   .row-container {
-    flex-direction: column; /* 🔥 세로 정렬 */
+    flex-direction: column;
     align-items: center;
   }
 
-  .calendar-section, .map-section, 
-  .menu-counter-section, .menu-chart-section {
+  .calendar-section,
+  .map-section,
+  .cooltime-section,
+  .chart-row {
     width: 100%;
     max-width: 600px;
-    margin-bottom: 10px;
   }
 }
 </style>

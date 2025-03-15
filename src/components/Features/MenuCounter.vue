@@ -26,25 +26,28 @@
         <input type="date" v-model="selectedDate" class="date-picker" />
       </div>
   
-      <button class="submit-btn" @click="submitMenuCount">등록</button>
+      <!-- ✅ CommonButton 적용 -->
+      <CommonButton buttonStyle="primary" @click="submitMenuCount">등록</CommonButton>
   
       <hr />
   
-      <!-- ✅ Firestore에서 가져온 메뉴 카운트 리스트 -->
-      <h3>🍛 최근 먹은 메뉴</h3>
-      <ul class="menu-list">
-        <li v-for="(menu, index) in menuCounts" :key="index">
-            📌 {{ menu.userId }} - {{ menu.restaurant }} ({{ menu.date }})  
-            <span>🍽️ {{ menu.count ?? 1 }}</span> <!-- 🔥 count가 없으면 기본값 1 -->
-        </li>
-    </ul>
+      <!-- ✅ 최근 먹은 메뉴 데이터 유지 (UI에서 숨김) -->
+      <div class="hidden-data">
+        <ul>
+          <li v-for="(menu, index) in menuCounts" :key="index">
+            📌 {{ menu.userId }} - {{ menu.restaurant }} ({{ menu.date }})
+          </li>
+        </ul>
+      </div>
     </div>
   </template>
   
   <script>
   import { addMenuCount, getMenuCounts } from "@/firebase/firebaseDB"; // ✅ Firestore 함수 가져오기
+  import CommonButton from "@/components/Common/Button.vue"; // ✅ 버튼 컴포넌트 가져오기
   
   export default {
+    components: { CommonButton }, // ✅ 버튼 등록
     data() {
       return {
         selectedRestaurant: "",
@@ -62,7 +65,6 @@
       };
     },
     methods: {
-      /** ✅ Firestore에 메뉴 카운트 추가 */
       async submitMenuCount() {
         if (!this.selectedRestaurant || !this.selectedUser || !this.selectedDate) {
           alert("⚠️ 모든 항목을 선택해주세요!");
@@ -70,46 +72,28 @@
         }
   
         try {
-          console.log("📌 Firestore에 저장 시도:", {
-            userId: this.selectedUser,
-            restaurant: this.selectedRestaurant,
-            date: this.selectedDate
-          });
-  
           const success = await addMenuCount(this.selectedUser, this.selectedRestaurant, this.selectedDate);
-          
           if (success) {
-            console.log("✅ Firestore 메뉴 등록 성공!");
             alert("✅ 메뉴 등록 성공!");
             this.resetForm();
             this.fetchMenuCounts(); // 🔥 Firestore 데이터 다시 불러오기
           } else {
-            console.error("❌ Firestore 메뉴 등록 실패!");
             alert("❌ 메뉴 등록 실패! 다시 시도해주세요.");
           }
         } catch (error) {
-          console.error("❌ Firestore 메뉴 등록 중 오류 발생:", error);
+          console.error("❌ 메뉴 등록 중 오류 발생:", error);
           alert("❌ 오류 발생! 콘솔을 확인하세요.");
         }
       },
-  
-      /** ✅ Firestore에서 메뉴 데이터 가져오기 */
       async fetchMenuCounts() {
-        console.log("📌 Firestore에서 메뉴 데이터 가져오는 중...");
-        
         this.menuCounts = await getMenuCounts();
-  
-        console.log("📌 가져온 메뉴 데이터:", this.menuCounts);
       },
-  
-      /** ✅ 입력 폼 초기화 */
       resetForm() {
         this.selectedRestaurant = "";
         this.selectedUser = "";
         this.selectedDate = new Date().toISOString().split("T")[0]; // 오늘 날짜로 초기화
       }
     },
-  
     async mounted() {
       await this.fetchMenuCounts(); // 🔥 페이지 로드 시 Firestore 데이터 가져오기
     }
@@ -127,7 +111,7 @@
     text-align: center;
   }
   
-  h2, h3 {
+  h2 {
     margin-bottom: 15px;
   }
   
@@ -150,34 +134,9 @@
     font-size: 16px;
   }
   
-  .submit-btn {
-    background: #007bff;
-    color: white;
-    border: none;
-    padding: 10px;
-    border-radius: 5px;
-    font-size: 16px;
-    cursor: pointer;
-    width: 100%;
-  }
-  
-  .submit-btn:hover {
-    background: #0056b3;
-  }
-  
-  /* ✅ Firestore에서 가져온 메뉴 리스트 스타일 */
-  .menu-list {
-    list-style: none;
-    padding: 0;
-  }
-  
-  .menu-list li {
-    background: #f9f9f9;
-    padding: 10px;
-    margin-bottom: 5px;
-    border-radius: 5px;
-    font-size: 14px;
-    text-align: left;
+  /* ✅ Firestore에서 가져온 최근 메뉴 데이터 숨기기 */
+  .hidden-data {
+    display: none;
   }
   </style>
   

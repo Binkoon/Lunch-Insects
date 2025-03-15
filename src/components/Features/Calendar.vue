@@ -171,14 +171,14 @@ export default {
           type: "no-event" // ✅ 일정이 없는 경우 'no-event' 타입
         }));
 
-      const allEvents = [...scheduleEvents, ...preferenceEvents];
+      return [...scheduleEvents, ...preferenceEvents];
 
-      // ✅ 이벤트 타입을 콘솔에서 확인
-      allEvents.forEach(event => {
-        console.log(`✅ 이벤트 타입 확인 - ID: ${event.id}, Type: ${event.type}, Reason: ${event.reason}`);
-      });
+      // // ✅ 이벤트 타입을 콘솔에서 확인
+      // allEvents.forEach(event => {
+      //   console.log(`✅ 이벤트 타입 확인 - ID: ${event.id}, Type: ${event.type}, Reason: ${event.reason}`);
+      // });
 
-      return allEvents;
+      // return allEvents;
     },
     deleteEvent(eventId, date, type) {
       console.log("🗑️ 삭제 요청됨:", eventId, date, type);
