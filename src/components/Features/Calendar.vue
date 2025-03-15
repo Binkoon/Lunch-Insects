@@ -25,11 +25,11 @@
           <span class="day-number">{{ day.day }}</span>
           <div v-if="day.holiday" class="holiday">{{ day.holiday }}</div>
           <div class="event-container">
-            <!-- 🔥 Firestore에서 가져온 일정 표시 -->
             <div v-for="event in getEventsForDate(day.date)" :key="event.id" 
                 class="event" 
-                :class="event.type === 'schedule' ? 'schedule-event' : 'no-event-bg'">
+                :class="{'schedule-event': event.type === 'schedule', 'no-event-bg': event.type === 'no-event'}">
               {{ event.reason || "이벤트 없음" }} ({{ event.userId || "알 수 없음" }})
+              <span> ({{ event.type }}) </span>  <!-- ✅ 여기에서 type 확인 -->
               <button class="delete-btn" @click.stop="deleteEvent(event.id, day.date, event.type)">✕</button>
             </div>
           </div>
@@ -151,34 +151,35 @@ export default {
     },
     /** 🔥 Firestore에서 가져온 데이터를 날짜별로 정리 */
     getEventsForDate(date) {
-        console.log(`📌 이벤트 필터링 중: ${date}`, this.events);
+      console.log(`📌 이벤트 필터링 중: ${date}`, this.events, this.preferences);
 
-        const scheduleEvents = this.events
-          .filter(event => event.date === date)
-          .map(event => {
-            console.log(`✅ 일정 데이터 확인 (schedule):`, event); // 🔥 콘솔 추가
-            return {
-              ...event,
-              reason: event.reason || "일정 없음",
-              userId: event.userId || "알 수 없음",
-              type: "schedule"
-            };
-          });
+      const scheduleEvents = this.events
+        .filter(event => event.date === date)
+        .map(event => ({
+          ...event,
+          reason: event.reason || "일정 없음",
+          userId: event.userId || "알 수 없음",
+          type: "schedule" // ✅ 일정이 있는 경우 'schedule' 타입
+        }));
 
-        const preferenceEvents = this.preferences
-          .filter(preference => preference.date === date)
-          .map(preference => {
-            console.log(`✅ 희망 음식점 데이터 확인 (no-event):`, preference); // 🔥 콘솔 추가
-            return { 
-              id: preference.id,
-              reason: preference.restaurants.join(", "),
-              userId: preference.participants.join(", "),
-              type: "no-event" // 🔥 여기에 type 추가!
-            };
-          });
+      const preferenceEvents = this.preferences
+        .filter(preference => preference.date === date)
+        .map(preference => ({ 
+          id: preference.id,
+          reason: preference.restaurants ? preference.restaurants.join(", ") : "음식점 선택 없음",
+          userId: preference.participants ? preference.participants.join(", ") : "참여자 없음",
+          type: "no-event" // ✅ 일정이 없는 경우 'no-event' 타입
+        }));
 
-        return [...scheduleEvents, ...preferenceEvents];
-      },
+      const allEvents = [...scheduleEvents, ...preferenceEvents];
+
+      // ✅ 이벤트 타입을 콘솔에서 확인
+      allEvents.forEach(event => {
+        console.log(`✅ 이벤트 타입 확인 - ID: ${event.id}, Type: ${event.type}, Reason: ${event.reason}`);
+      });
+
+      return allEvents;
+    },
     deleteEvent(eventId, date, type) {
       console.log("🗑️ 삭제 요청됨:", eventId, date, type);
       this.$emit("delete-event", eventId, date, type);
@@ -199,10 +200,10 @@ export default {
 };
 </script>
   
-  <style scoped>
+<style scoped>
 .calendar-container {
   width: 100%;
-  max-width: 1400px; /* ✅ 전체 컨테이너 너비 확장 */
+  max-width: 1400px;
   margin: auto;
   text-align: center;
   background: white;
@@ -220,8 +221,7 @@ export default {
   font-size: 16px;
 }
 
-
-/* ✅ 주차 & 네비게이션 버튼 가로 정렬 */
+/* ✅ 주차 & 네비게이션 버튼 */
 .calendar-header {
   display: flex;
   align-items: center;
@@ -230,26 +230,22 @@ export default {
   margin-bottom: 10px;
 }
 
-.nav-btn:hover {
-  background: #bbb;
-}
-
-  
-/* ✅ 날짜 컨테이너 크기 맞춤 */
+/* ✅ 날짜 컨테이너 - 자동 줄바꿈 추가 */
 .calendar-week {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap; /* 🔥 자동으로 줄바꿈 */
   gap: 10px;
   width: 100%;
-  padding: 0 10px; /* ✅ 양옆 여백 조정 */
+  padding: 0 10px;
+  justify-content: center;
 }
 
-
-/* ✅ 날짜 버튼 크기 확장 및 숫자 정렬 */
+/* ✅ 날짜 버튼 크기 & 유동적 너비 */
 .day-btn {
   flex: 1;
-  height: 160px; /* ✅ 높이 증가 */
-  min-width: 180px; /* ✅ 버튼 너비 증가 */
+  height: 160px;
+  min-width: 120px; /* 📌 모바일 화면에서 너무 커지지 않게 제한 */
+  max-width: calc(100% / 7 - 10px); /* 📌 7일 기준 최대 너비 */
   border-radius: 8px;
   background: #f9f9f9;
   cursor: pointer;
@@ -259,23 +255,48 @@ export default {
   font-weight: bold;
   display: flex;
   flex-direction: column;
-  align-items: flex-start; /* ✅ 왼쪽 정렬 */
-  justify-content: flex-start; /* ✅ 상단 정렬 */
-  padding: 10px 15px; /* ✅ 내부 패딩 */
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 10px 15px;
 }
 
-/* ✅ 숫자 크기 줄이고 위치 조정 */
+/* ✅ 요일 줄어들면서 캘린더 자동 배치 조정 */
+@media (max-width: 1024px) {
+  .day-btn {
+    max-width: calc(100% / 5 - 10px); /* 🔥 2×5 레이아웃 */
+  }
+}
+
+@media (max-width: 768px) {
+  .day-btn {
+    max-width: calc(100% / 4 - 10px); /* 🔥 3×4 레이아웃 */
+  }
+}
+
+@media (max-width: 600px) {
+  .day-btn {
+    max-width: calc(100% / 3 - 10px); /* 🔥 4×3 레이아웃 */
+  }
+}
+
+@media (max-width: 450px) {
+  .day-btn {
+    max-width: calc(100% / 2 - 10px); /* 🔥 7×1 레이아웃 */
+  }
+}
+
+/* ✅ 숫자 크기 조정 */
 .day-number {
   font-size: 16px;
   font-weight: bold;
   margin-bottom: 5px;
 }
-  
-  .day-btn:hover {
-    background: #e0e0e0;
-  }
 
- /* ✅ 일정 목록 */
+.day-btn:hover {
+  background: #e0e0e0;
+}
+
+/* ✅ 일정 목록 */
 .event-container {
   display: flex;
   flex-direction: column;
@@ -283,25 +304,20 @@ export default {
   width: 100%;
 }
 
-.event {
+/* ✅ 일정이 있는 경우 (파란색) */
+.schedule-event {
   background: rgba(0, 128, 255, 0.1);
-  padding: 5px 8px;
-  border-radius: 5px;
-  font-size: 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 90%;
+  color: #007bff;
 }
-  
-  .saturday-day .day-number {
-    color: blue;
-  }
-  
-  .sunday-day .day-number, .holiday-day .day-number {
-    color: red;
-  }
 
+/* ✅ 일정이 없는 경우 (연두색) */
+.no-event-bg {
+  background: #D4EDDA;
+  color: #155724;
+  border: 1px solid #C3E6CB;
+}
+
+/* ✅ 삭제 버튼 */
 .delete-btn {
   background: red;
   color: white;
@@ -312,17 +328,20 @@ export default {
   font-size: 12px;
 }
 
-/* ✅ 일정이 있는 경우 (파란색) */
-.schedule-event {
-  background: rgba(0, 128, 255, 0.1); 
-  color: #007bff;
+/* ✅ 날짜 숫자 색상 적용 */
+.day-number {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 5px;
 }
 
-/* ✅ 일정이 없는 경우 (연두색) */
-.no-event-bg {
-  background: #D4EDDA; 
-  color: #155724;
-  border: 1px solid #C3E6CB;
+/* ✅ 주말 및 공휴일 색상 지정 */
+.saturday-day .day-number {
+  color: blue !important;
 }
-  </style>
-  
+
+.sunday-day .day-number,
+.holiday-day .day-number {
+  color: red !important;
+}
+</style>

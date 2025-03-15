@@ -1,11 +1,11 @@
 <template>
   <nav class="top-nav" :style="{ backgroundImage: `url(${backgroundImage})` }">
-    <h1 class="nav-title">KMTC INSECTS</h1>
+    <h1 class="nav-title">식충이 캘린더</h1>
   </nav>
 </template>
 
 <script>
-import headerBg from "/src/assets/header_img_light.webp"; 
+import headerBg from "/src/assets/header_img_food2.jpg"; 
 
 export default {
   data() {

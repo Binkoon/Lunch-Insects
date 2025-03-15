@@ -5,8 +5,8 @@
       <TopNav />
     </div>
 
-    <div class="content-container">
-      <!-- 주간 캘린더 -->
+    <!-- 📌 주간 캘린더 & 지도 -->
+    <div class="row-container">
       <div class="calendar-section">
         <Calendar 
           :showModal="showModal" 
@@ -19,9 +19,19 @@
         />
       </div>
 
-      <!-- 지도 -->
       <div class="map-section">
         <Map />
+      </div>
+    </div>
+
+    <!-- 📌 메뉴 카운터 & 차트 -->
+    <div class="row-container">
+      <div class="menu-counter-section">
+        <MenuCounter />
+      </div>
+
+      <div class="menu-chart-section">
+        <MenuChart />
       </div>
     </div>
   </div> 
@@ -32,12 +42,16 @@ import Calendar from "@/components/Features/Calendar.vue";
 import TopNav from "@/components/Common/TopNav.vue";
 import Map from "@/components/Features/Map.vue"; // ✅ 지도 컴포넌트 추가
 import { getAllSchedules, addSchedule, deleteSchedule, deletePreference } from "@/firebase/firebaseDB"; 
+import MenuCounter from "@/components/Features/MenuCounter.vue";
+import MenuChart from "@/components/Features/MenuChart.vue";
 
 export default {
   components: {
     Calendar,
     TopNav,
     Map, // ✅ Map 추가
+    MenuCounter,
+    MenuChart,
   },
   data() {
     return {
@@ -126,57 +140,79 @@ export default {
 };
 </script>
   
-  <style scoped>
-  /* ✅ 기존 스타일 유지 */
-  .layout-container {
-    display: flex;
-    flex-direction: column;
-    width: 100vw;
-    gap: 30px;
-    padding: 20px;
-  }
-  
-  .content-container {
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: stretch;
-    width: 100vw;
-    height: auto;
-    gap: 20px;
-  }
-  
-  .calendar-section {
-    flex: 1;
-    display: flex;
-    justify-content: center;
+<style scoped>
+/* ✅ 전체 레이아웃 */
+.layout-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  padding: 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ✅ 헤더 배경 이미지 100% */
+.top-nav {
+  width: 100%;
+}
+
+/* ✅ 2개의 row (캘린더+지도 / 카운터+차트) */
+.row-container {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  /* max-width: 1400px; */
+  gap: 10px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+/* ✅ 첫 번째 row (캘린더 60% / 지도 40%) */
+.calendar-section {
+  flex: 6;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.map-section {
+  flex: 4;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+/* ✅ 두 번째 row (카운터 50% / 차트 50%) */
+.menu-counter-section {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.menu-chart-section {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+/* 📌 반응형 적용 */
+@media (max-width: 1024px) {
+  .row-container {
+    flex-direction: column; /* 🔥 세로 정렬 */
     align-items: center;
-    min-height: 450px;
   }
-  
-  /* ✅ 지도 컨테이너 스타일 추가 */
-  .map-section {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 450px;
-    background: #f9f9f9;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+
+  .calendar-section, .map-section, 
+  .menu-counter-section, .menu-chart-section {
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 10px;
   }
-  
-  @media (max-width: 1024px) {
-    .content-container {
-      flex-direction: column;
-      align-items: center;
-    }
-  
-    .calendar-section,
-    .map-section {
-      max-width: 100%;
-    }
-  }
-  </style>
-  
+}
+</style>

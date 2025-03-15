@@ -1,6 +1,6 @@
 // src/firebase/firebaseDB.js
 import { db } from "./firebase";
-import { collection, doc, setDoc, getDocs, deleteDoc, getDoc } from "firebase/firestore";
+import { collection, doc, setDoc, getDocs, deleteDoc, getDoc, query, where, increment } from "firebase/firestore";
 
 /** ✅ Firestore 일정 추가 함수 */
 const addSchedule = async (userId, date, reason, participants = []) => {
@@ -121,10 +121,74 @@ const deletePreference = async (docId) => {
   }
 };
 
+const addMenuCount = async (userId, restaurant, date) => {
+  if (!userId || !restaurant || !date) {
+    console.error("❌ Firestore 메뉴 카운트 저장 실패: 필수 데이터 누락", { userId, restaurant, date });
+    return false;
+  }
+
+  try {
+    const menuRef = doc(db, "menu_counts", `${date}_${userId}_${restaurant}`);
+    const menuSnap = await getDoc(menuRef);
+
+    if (menuSnap.exists()) {
+      // ✅ 기존 데이터가 있으면 count 증가
+      await setDoc(menuRef, {
+        count: increment(1),
+        updatedAt: new Date(),
+      }, { merge: true });
+    } else {
+      // ✅ 기존 데이터가 없으면 새로운 문서 생성
+      await setDoc(menuRef, {
+        userId,
+        restaurant,
+        date,
+        count: 1,  // ✅ 초기값 1 설정
+        createdAt: new Date(),
+      });
+    }
+
+    console.log("✅ Firestore 메뉴 카운트 저장 성공!", { userId, restaurant, date });
+    return true;
+  } catch (error) {
+    console.error("❌ Firestore 메뉴 카운트 저장 실패:", error);
+    return false;
+  }
+};
+
+/** ✅ Firestore에서 모든 메뉴 카운트 가져오기 */
+const getMenuCounts = async (startDate = null, endDate = null) => {
+  try {
+    const menuCountsRef = collection(db, "menu_counts");
+    
+    let q = query(menuCountsRef);
+    
+    // ✅ 특정 기간 필터링 (옵션)
+    if (startDate && endDate) {
+      q = query(menuCountsRef, where("date", ">=", startDate), where("date", "<=", endDate));
+    }
+
+    const querySnapshot = await getDocs(q);
+
+    let menuData = [];
+    querySnapshot.forEach((doc) => {
+      menuData.push({ id: doc.id, ...doc.data() });
+    });
+
+    console.log("📌 Firestore에서 가져온 메뉴 데이터:", menuData);
+    return menuData;
+  } catch (error) {
+    console.error("❌ Firestore 메뉴 데이터 조회 실패:", error);
+    return [];
+  }
+};
+
 export {
-  addSchedule,
-  addPreference,
-  getAllSchedules,
-  deleteSchedule,
+  addSchedule,  // 스케줄 추가
+  addPreference, // 희망 음식 추가
+  addMenuCount, // 메뉴 카운터
+  getMenuCounts, // 메뉴 카운터 횟수 조회
+  getAllSchedules, // 모든 스케줄 조회
+  deleteSchedule, 
   deletePreference,
 };
