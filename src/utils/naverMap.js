@@ -51,34 +51,36 @@ export function initNaverMap(mapContainerId, lat = 37.563, lng = 126.9815, callb
   });
 }
 
-// 🚶‍♂️ 네이버 Directions API를 사용해 도보 이동 시간 및 거리 계산
+// 🚶‍♂️ 네이버 Directions API를 사용해 도보 이동 시간 및 거리 계산 (백엔드 프록시 사용)
 export function getWalkingTime(startLat, startLng, destLat, destLng, callback) {
-  if (!NAVER_CLIENT_ID) {
-    console.error("⚠️ 네이버 Directions API 키가 설정되지 않았습니다.");
-    callback(null);
-    return;
-  }
+  const url = `http://localhost:5000/api/directions?startLat=${startLat}&startLng=${startLng}&destLat=${destLat}&destLng=${destLng}`;
 
-  const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${startLng},${startLat}&goal=${destLng},${destLat}&option=pedestrian`;
+  console.log(`🔍 Directions API 요청: ${url}`);
 
-  fetch(url, {
-    method: "GET",
-    headers: {
-      "X-NCP-APIGW-API-KEY-ID": NAVER_CLIENT_ID,
-    },
-  })
+  fetch(url)
     .then(response => response.json())
     .then(data => {
       console.log("🚶‍♂️ Walking Directions API 응답 데이터:", data);
-      if (data.code === 0 && data.route.traoptimal.length > 0) {
-        const route = data.route.traoptimal[0].summary;
-        const walkingTime = route.duration / 60; // 초 → 분 변환
-        const distance = route.distance / 1000; // 미터 → 킬로미터 변환
-        callback({ walkingTime: Math.round(walkingTime), distance: distance.toFixed(2) });
-      } else {
-        console.error("❌ 도보 경로 탐색 실패", data);
+
+      if (!data.route || !data.route.traoptimal || data.route.traoptimal.length === 0) {
+        console.warn("⚠️ 도보 경로 데이터 없음:", data);
         callback(null);
+        return;
       }
+
+      const route = data.route.traoptimal[0].summary;
+      let walkingTime = route.duration / 60; // 초 → 분 변환
+      const distance = route.distance / 1000; // 미터 → 킬로미터 변환
+
+      // 🚨 비정상적인 도보 시간 보정 (1km당 12~15분 기준)
+      const estimatedTime = distance * 12; // 1km당 12분 기준
+      if (walkingTime > estimatedTime * 2) {
+        console.warn(`⚠️ 비정상적인 도보 시간 (${walkingTime}분) → 보정된 값 사용 (${estimatedTime}분)`);
+        walkingTime = estimatedTime; // 보정된 값 사용
+      }
+
+      console.log(`✅ 최종 도보 시간: ${walkingTime}분, 거리: ${distance} km`);
+      callback({ walkingTime: Math.round(walkingTime), distance: distance.toFixed(2) });
     })
     .catch(error => {
       console.error("❌ 네트워크 오류", error);
@@ -86,10 +88,12 @@ export function getWalkingTime(startLat, startLng, destLat, destLng, callback) {
     });
 }
 
-// 📍 지도에 음식점 마커 추가 (도보 이동 시간 포함)
+
+// 📍 지도에 음식점 마커 추가 (도보 이동 시간 + 남은 시간 포함)
 export function addMarkersToMap(map, restaurantList) {
   const startLat = 37.563;
   const startLng = 126.9815;
+  const lunchTimeMinutes = 75; // 점심시간 (75분)
 
   restaurantList.forEach(({ name, lat, lng }) => {
     const marker = new naver.maps.Marker({
@@ -104,12 +108,29 @@ export function addMarkersToMap(map, restaurantList) {
 
     // 도보 이동 시간 계산 후 InfoWindow에 표시
     getWalkingTime(startLat, startLng, lat, lng, (data) => {
-      const timeText = data
-        ? `🚶‍♂️ ${data.walkingTime}분 (${data.distance} km)`
-        : "시간 정보 없음";
-      const infoWindow = new naver.maps.InfoWindow({
-        content: `<div style="padding:10px;font-size:14px;">🍽️ ${name}<br>${timeText}</div>`,
-      });
+      if (!data) {
+        console.error(`🚨 ${name} 도보 시간 계산 실패`);
+        return;
+      }
+
+      // 🚀 음식 준비 시간 (5~10분 랜덤)
+      const foodPrepTime = Math.floor(Math.random() * 6) + 5; // 5~10분 랜덤
+
+      // ⏳ 남은 점심시간 계산
+      const remainingTime = lunchTimeMinutes - data.walkingTime * 2 - foodPrepTime;
+      const remainingTimeText = remainingTime > 0 ? `😎 ${remainingTime}분` : "❗ 부족할 수도 있음";
+
+      // 🏷️ InfoWindow 표시 내용
+      const infoContent = `
+        <div style="padding:10px;font-size:14px;">
+          🍽️ <strong>${name}</strong><br>
+          🚶‍♂️ 도보: ${data.walkingTime}분 (${data.distance} km)<br>
+          ⏳ 음식 준비: ${foodPrepTime}분<br>
+          🕒 남은 시간: ${remainingTimeText}
+        </div>
+      `;
+
+      const infoWindow = new naver.maps.InfoWindow({ content: infoContent });
 
       naver.maps.Event.addListener(marker, "click", () => {
         infoWindow.open(map, marker);
@@ -120,26 +141,22 @@ export function addMarkersToMap(map, restaurantList) {
 
 // 📍 네이버 Geocoding API를 사용해 주소 → 좌표 변환
 export function getLatLngFromAddress(address, callback) {
-  if (!NAVER_CLIENT_ID) {
-    console.error("⚠️ 네이버 Geocoding API 키가 설정되지 않았습니다.");
-    callback(null);
-    return;
-  }
-
   const url = `http://localhost:5000/api/geocode?address=${encodeURIComponent(address)}`;
 
   fetch(url)
     .then(response => response.json())
     .then(data => {
       console.log(`📍 Geocoding API 응답 (${address}):`, data);
-      if (data.status === "OK" && data.addresses.length > 0) {
-        const { y: lat, x: lng } = data.addresses[0];
-        console.log(`✅ 변환 완료: ${address} → lat: ${lat}, lng: ${lng}`);
-        callback({ lat: parseFloat(lat), lng: parseFloat(lng) });
-      } else {
+
+      if (!data.addresses || data.addresses.length === 0) {
         console.error(`❌ Geocoding 실패: ${address}`, data);
         callback(null);
+        return;
       }
+
+      const { y: lat, x: lng } = data.addresses[0];
+      console.log(`✅ 변환 완료: ${address} → lat: ${lat}, lng: ${lng}`);
+      callback({ lat: parseFloat(lat), lng: parseFloat(lng) });
     })
     .catch(error => {
       console.error("❌ 네트워크 오류", error);

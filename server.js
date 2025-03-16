@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 
-dotenv.config(); // 환경변수 로드
+dotenv.config(); // 환경변수 로드  <- 이거 무조건 최상위로 둬라
 
 import express from "express";
 import cors from "cors";
@@ -57,7 +57,7 @@ app.get("/api/directions", async (req, res) => {
     return res.status(400).json({ error: "잘못된 요청: 좌표 값이 필요합니다." });
   }
 
-  const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${startLng},${startLat}&goal=${destLng},${destLat}&option=pedestrian`;
+  const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${startLng},${startLat}&goal=${destLng},${destLat}&option=pedestrian&mode=walk`;
 
   try {
     console.log(`🔍 Directions API 요청: ${url}`);
