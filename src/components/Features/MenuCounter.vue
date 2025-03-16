@@ -59,7 +59,8 @@
           "콜리그", "왕비집", "26층", "26층 (VIP)", "은앤정 닭갈비", 
           "태진옥", "청진동 해장국", "용호동 낙지", "미쓰족발", "칙바이칙",
           "밀피유", "보노보스", "애성회관", "돈우가", "박씨화로구이", 
-          "KFC", "BBQ", "신의주 찹쌀순대", "스쿨푸드", "모모카페", "알로프트"
+          "KFC", "BBQ", "신의주 찹쌀순대", "스쿨푸드", "모모카페", "알로프트",
+          "일품향" , "강남면옥"
         ],
         userList: ["John", "Jack", "Jane", "Jill"], // ✅ 사용자 리스트
       };
@@ -74,7 +75,7 @@
         try {
           const success = await addMenuCount(this.selectedUser, this.selectedRestaurant, this.selectedDate);
           if (success) {
-            alert("✅ 메뉴 등록 성공!");
+            // alert("✅ 메뉴 등록 성공!");
             this.resetForm();
             this.fetchMenuCounts(); // 🔥 Firestore 데이터 다시 불러오기
           } else {
@@ -106,7 +107,7 @@
     padding: 20px;
     border-radius: 10px;
     box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
-    max-width: 400px;
+    max-width: 600px;
     margin: auto;
     text-align: center;
   }

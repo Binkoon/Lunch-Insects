@@ -201,15 +201,17 @@ export default {
 </script>
   
 <style scoped>
+/* ✅ 캘린더 높이 조정 */
 .calendar-container {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1500px;
   margin: auto;
   text-align: center;
   background: white;
   padding: 20px;
   border-radius: 10px;
   box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+  height: 400px; /* 🔥 기존보다 높이 증가 */
 }
 
 /* ✅ 요일 높이 조정 */
@@ -240,19 +242,19 @@ export default {
   justify-content: center;
 }
 
-/* ✅ 날짜 버튼 크기 & 유동적 너비 */
+/* ✅ 날짜 버튼 크기 증가 */
 .day-btn {
   flex: 1;
-  height: 160px;
-  min-width: 120px; /* 📌 모바일 화면에서 너무 커지지 않게 제한 */
-  max-width: calc(100% / 7 - 10px); /* 📌 7일 기준 최대 너비 */
+  height: 250px; /* 🔥 기존보다 높이 증가 */
+  min-width: 140px;
+  max-width: calc(100% / 7 - 10px);
   border-radius: 8px;
   background: #f9f9f9;
   cursor: pointer;
   transition: background 0.2s ease-in-out;
   border: none;
-  font-size: 20px;
-  font-weight: bold;
+  font-size: 18px;
+  font-weight: normal;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -304,28 +306,44 @@ export default {
   width: 100%;
 }
 
-/* ✅ 일정이 있는 경우 (파란색) */
+/* ✅ 일정 스타일 */
+.schedule-event, .no-event-bg {
+  font-size: 12px; /* 🔥 글자 크기 줄이기 */
+  font-weight: normal; /* 🔥 글자 굵기 제거 */
+  padding: 5px 10px;
+  border-radius: 15px;
+  text-align: center;
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ✅ 일정 스타일 - 일정 있음 */
 .schedule-event {
-  background: rgba(0, 128, 255, 0.1);
-  color: #007bff;
+  background: linear-gradient(45deg, #4da8da, #5adbb5, #b4e33d);
+  color: white;
 }
 
-/* ✅ 일정이 없는 경우 (연두색) */
+/* ✅ 일정 스타일 - 희망 음식점 */
 .no-event-bg {
-  background: #D4EDDA;
-  color: #155724;
-  border: 1px solid #C3E6CB;
+  background: linear-gradient(45deg, #6cd8b5, #98e65b);
+  color: white;
 }
 
-/* ✅ 삭제 버튼 */
+/* ✅ 일정 삭제 버튼 */
 .delete-btn {
-  background: red;
+  background: rgba(255, 0, 0, 0.8);
   color: white;
   border: none;
   padding: 5px;
   cursor: pointer;
   border-radius: 5px;
-  font-size: 12px;
+  font-size: 10px; /* 🔥 크기 줄이기 */
+}
+
+.delete-btn:hover {
+  background: red;
 }
 
 /* ✅ 날짜 숫자 색상 적용 */
