@@ -1,29 +1,52 @@
-# yas
+# 🍽️ 식충이 캘린더 (Lunch-Insects)  
 
-This template should help get you started developing with Vue 3 in Vite.
+네이버 지도 API를 활용한 **점심 식사 기록 및 거리 계산 프로젝트**!  
+점심시간(75분) 내에서 이동 시간을 계산하고, 남은 휴식 시간을 표시해줍니다.  
 
-## Recommended IDE Setup
+---
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## 🚀 1. 프로젝트 개요  
+이 프로젝트는 팀원들이 어디에서 점심을 먹었는지 기록하고,  
+**네이버 지도 API**를 활용해 도보 이동 시간과 거리를 계산하여 **최적의 점심 장소**를 추천합니다.  
+또한, **남은 점심시간**을 계산하여 얼마나 여유롭게 쉴 수 있는지도 보여줍니다. 😎  
 
-## Customize configuration
+---
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+## ✨ 2. 주요 기능  
 
-## Project Setup
+✔ **주간 캘린더를 통해 일정이 있는 사람, 일정이 없는 사람을 구별하여 표시!**
 
-```sh
+✔ **지도에 회사 주변 음식점 마커 표시**  
+✔ **네이버 Geocoding API**로 주소 → 위경도 변환  
+✔ **네이버 Directions API**로 도보 이동 시간 및 거리 계산  
+✔ **음식 준비 시간 (5~10분 랜덤) 반영**  
+✔ **점심시간(75분)에서 이동/준비 시간 차감 후, 남은 휴식 시간 계산**  
+✔ **어떤 음식점을 안간지 오래됐는지 쿨타임 주기를 보여줌**
+
+✔ **점메추 랜덤박스!**
+
+---
+
+## 📌 3. 실행 방법  
+
+### 💻 1️⃣ **프로젝트 클론 및 설치**  
+```bash
+git clone https://github.com/your-repo/lunch-insects.git
+cd lunch-insects
 npm install
 ```
-
-### Compile and Hot-Reload for Development
-
-```sh
-npm run dev
+### 🛠️ 2️⃣ 환경 변수 설정 (.env)
+.env 파일을 만들고 네이버 API 키를 설정합니다.
+```
+VITE_NAVER_MAP_CLIENT_ID=YOUR_CLIENT_ID
+VITE_NAVER_MAP_CLIENT_SECRET=YOUR_CLIENT_SECRET
 ```
 
-### Compile and Minify for Production
+---
+## 🗺️ 4. 주요 화면  (주요 화면은 디테일한 레이아웃 배치 작업 완료 후 첨부 예정)
+📍 메인 화면 (네이버 지도 + 마커)
 
-```sh
-npm run build
-```
+🔵 파란색 마커: 음식점 위치
+🔴 빨간색 마커: 회사(기본 위치)
+🍽️ 마커 클릭 시 표시되는 정보
+✅ 도보 이동 시간 + 음식 준비 시간 + 남은 시간
