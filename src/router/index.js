@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory } from "vue-router";
-import Intro from "../views/Intro.vue";
-import Auth from "../views/Auth.vue";
-import Onboarding from "../views/Onboarding.vue";
-import HomeNew from "../views/HomeNew.vue";
-import About from "../views/About.vue";
+import Intro from "../pages/Intro.vue";
+import Auth from "../pages/Auth.vue";
+import Onboarding from "../pages/Onboarding.vue";
+import HomeNew from "../pages/HomeNew.vue";
+import About from "../pages/About.vue";
 
 const routes = [
   {

@@ -318,8 +318,12 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue';
+import { Chart, registerables } from 'chart.js';
 import GroupCalendar from '@/components/Features/GroupCalendar.vue';
 import GroupManagement from '@/components/Features/GroupManagement.vue';
+
+// Chart.js 등록
+Chart.register(...registerables);
 
 export default {
   name: 'HomeNew',
@@ -841,127 +845,131 @@ export default {
     const drawChart = () => {
       if (!expenseChart.value) return;
       
+      // 기존 차트 인스턴스 제거
+      if (window.chartInstance) {
+        window.chartInstance.destroy();
+      }
+      
       const ctx = expenseChart.value.getContext('2d');
-      const canvas = expenseChart.value;
       
-      // 캔버스 초기화
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // 샘플 데이터 (실제로는 API에서 가져와야 함)
-      const sampleData = selectedChartType.value === 'personal' 
-        ? {
+      if (selectedChartType.value === 'personal') {
+        // 개인 소비 - 꺾은선 그래프
+        window.chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
             labels: ['1월', '2월', '3월', '4월', '5월', '6월'],
-            ticketPoints: [12000, 15000, 18000, 14000, 16000, 20000],
-            cash: [8000, 12000, 10000, 15000, 13000, 18000]
+            datasets: [
+              {
+                label: '식권포인트',
+                data: [12000, 15000, 18000, 14000, 16000, 20000],
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true
+              },
+              {
+                label: '현금',
+                data: [8000, 12000, 10000, 15000, 13000, 18000],
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                tension: 0.4,
+                fill: true
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              title: {
+                display: true,
+                text: '개인 소비 분석',
+                font: { size: 16, weight: 'bold' }
+              },
+              legend: {
+                position: 'top',
+                labels: { usePointStyle: true, padding: 20 }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(value) {
+                    return value.toLocaleString() + '원';
+                  }
+                }
+              }
+            }
           }
-        : {
+        });
+      } else {
+        // 그룹 소비 - 막대 그래프
+        const memberData = [
+          { name: '김철수', color: '#3b82f6' },
+          { name: '이영희', color: '#10b981' },
+          { name: '박민수', color: '#f59e0b' },
+          { name: '정수진', color: '#ef4444' },
+          { name: '최동현', color: '#8b5cf6' }
+        ];
+        
+        const datasets = [];
+        memberData.forEach(member => {
+          const ticketPoints = [12000, 15000, 18000, 14000, 16000, 20000].map(v => v + Math.random() * 5000);
+          const cash = [8000, 12000, 10000, 15000, 13000, 18000].map(v => v + Math.random() * 3000);
+          
+          datasets.push({
+            label: `${member.name} (식권포인트)`,
+            data: ticketPoints,
+            backgroundColor: member.color + '80',
+            borderColor: member.color,
+            borderWidth: 1,
+            borderRadius: 4
+          });
+          
+          datasets.push({
+            label: `${member.name} (현금)`,
+            data: cash,
+            backgroundColor: member.color + '40',
+            borderColor: member.color,
+            borderWidth: 1,
+            borderRadius: 4
+          });
+        });
+        
+        window.chartInstance = new Chart(ctx, {
+          type: 'bar',
+          data: {
             labels: ['1월', '2월', '3월', '4월', '5월', '6월'],
-            ticketPoints: [45000, 52000, 48000, 55000, 60000, 65000],
-            cash: [30000, 35000, 32000, 40000, 38000, 42000]
-          };
-      
-      // 그래프 그리기
-      drawLineChart(ctx, canvas, sampleData);
-    };
-    
-    const drawLineChart = (ctx, canvas, data) => {
-      const padding = 60;
-      const chartWidth = canvas.width - padding * 2;
-      const chartHeight = canvas.height - padding * 2;
-      
-      // 배경 그리기
-      ctx.fillStyle = '#f8f9fa';
-      ctx.fillRect(padding, padding, chartWidth, chartHeight);
-      
-      // 격자 그리기
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 1;
-      
-      // 수평 격자
-      for (let i = 0; i <= 5; i++) {
-        const y = padding + (chartHeight / 5) * i;
-        ctx.beginPath();
-        ctx.moveTo(padding, y);
-        ctx.lineTo(padding + chartWidth, y);
-        ctx.stroke();
+            datasets: datasets
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              title: {
+                display: true,
+                text: '그룹 소비 분석',
+                font: { size: 16, weight: 'bold' }
+              },
+              legend: {
+                position: 'top',
+                labels: { usePointStyle: true, padding: 15 }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function(value) {
+                    return value.toLocaleString() + '원';
+                  }
+                }
+              }
+            }
+          }
+        });
       }
-      
-      // 수직 격자
-      for (let i = 0; i <= data.labels.length; i++) {
-        const x = padding + (chartWidth / data.labels.length) * i;
-        ctx.beginPath();
-        ctx.moveTo(x, padding);
-        ctx.lineTo(x, padding + chartHeight);
-        ctx.stroke();
-      }
-      
-      // Y축 레이블
-      ctx.fillStyle = '#6c757d';
-      ctx.font = '12px Noto Sans KR';
-      ctx.textAlign = 'right';
-      const maxValue = Math.max(...data.ticketPoints, ...data.cash);
-      for (let i = 0; i <= 5; i++) {
-        const value = Math.round((maxValue / 5) * (5 - i));
-        const y = padding + (chartHeight / 5) * i + 4;
-        ctx.fillText(value.toLocaleString(), padding - 10, y);
-      }
-      
-      // X축 레이블
-      ctx.textAlign = 'center';
-      data.labels.forEach((label, index) => {
-        const x = padding + (chartWidth / data.labels.length) * (index + 0.5);
-        const y = padding + chartHeight + 20;
-        ctx.fillText(label, x, y);
-      });
-      
-      // 식권포인트 라인 그리기
-      ctx.strokeStyle = '#ff6b6b';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      data.ticketPoints.forEach((value, index) => {
-        const x = padding + (chartWidth / data.labels.length) * (index + 0.5);
-        const y = padding + chartHeight - (value / maxValue) * chartHeight;
-        if (index === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      });
-      ctx.stroke();
-      
-      // 현금 라인 그리기
-      ctx.strokeStyle = '#4ecdc4';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      data.cash.forEach((value, index) => {
-        const x = padding + (chartWidth / data.labels.length) * (index + 0.5);
-        const y = padding + chartHeight - (value / maxValue) * chartHeight;
-        if (index === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
-      });
-      ctx.stroke();
-      
-      // 데이터 포인트 그리기
-      data.ticketPoints.forEach((value, index) => {
-        const x = padding + (chartWidth / data.labels.length) * (index + 0.5);
-        const y = padding + chartHeight - (value / maxValue) * chartHeight;
-        ctx.fillStyle = '#ff6b6b';
-        ctx.beginPath();
-        ctx.arc(x, y, 4, 0, 2 * Math.PI);
-        ctx.fill();
-      });
-      
-      data.cash.forEach((value, index) => {
-        const x = padding + (chartWidth / data.labels.length) * (index + 0.5);
-        const y = padding + chartHeight - (value / maxValue) * chartHeight;
-        ctx.fillStyle = '#4ecdc4';
-        ctx.beginPath();
-        ctx.arc(x, y, 4, 0, 2 * Math.PI);
-        ctx.fill();
-      });
     };
     
     // 컴포넌트 마운트 시 그래프 초기화

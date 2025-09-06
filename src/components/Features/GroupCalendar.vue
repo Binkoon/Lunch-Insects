@@ -1,5 +1,5 @@
 <template>
-  <div class="modern-calendar">
+  <div class="modern-calendar" ref="calendarRef">
     <!-- 캘린더 헤더 -->
     <div class="calendar-header">
       <div class="header-top">
@@ -52,6 +52,7 @@
         <div 
           v-for="day in calendarDays" 
           :key="day.date"
+          :data-date="day.date"
           class="day-card"
           :class="{ 
             'other-month': !day.isCurrentMonth,
@@ -93,14 +94,21 @@
                 v-for="proposal in getProposalsForDay(day.date)" 
                 :key="proposal.id"
                 class="proposal-item"
-                :class="getProposalStatus(proposal)"
+                :class="[getProposalStatus(proposal), { 'dragging': draggingProposal?.id === proposal.id }]"
+                :draggable="true"
                 @click="openProposalModal(proposal)"
+                @dragstart="startDrag($event, proposal)"
+                @dragend="endDrag"
+                @dragenter.prevent
+                @dragover.prevent
+                @drop="dropProposal($event, day.date)"
               >
                 <div class="proposal-info">
                   <span class="proposer-name">{{ proposal.proposer.name }}</span>
                   <span class="restaurant-name">{{ proposal.restaurant.name }}</span>
                   <span class="proposal-status">{{ getProposalStatus(proposal) === 'pending' ? '제안 중' : getProposalStatus(proposal) === 'accepted' ? '확정' : '거부' }}</span>
                 </div>
+                <div class="drag-handle">⋮⋮</div>
               </div>
             </div>
           </div>
@@ -405,7 +413,8 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
+import { gsap } from 'gsap';
 import { 
   saveMemberStatus, 
   getMemberStatus, 
@@ -441,6 +450,14 @@ export default {
     const proposals = ref([]);
     const showProposalModal = ref(false);
     const selectedProposal = ref(null);
+    
+    // 드래그 앤 드롭 관련
+    const draggingProposal = ref(null);
+    const dragOverDay = ref(null);
+    
+    // 애니메이션 관련
+    const calendarRef = ref(null);
+    const isAnimating = ref(false);
     
     // 상태 옵션
     const statusOptions = [
@@ -688,18 +705,27 @@ export default {
     };
     
     // 이전 달
-    const prevMonth = () => {
+    const prevMonth = async () => {
+      await animateCalendarTransition('prev');
       currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() - 1, 1);
     };
     
     // 다음 달
-    const nextMonth = () => {
+    const nextMonth = async () => {
+      await animateCalendarTransition('next');
       currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1);
     };
     
     // 날짜 선택
-    const selectDay = (day) => {
+    const selectDay = async (day) => {
       selectedDay.value = day;
+      
+      // 날짜 선택 애니메이션
+      await nextTick();
+      const dayElement = document.querySelector(`[data-date="${day.date}"]`);
+      if (dayElement) {
+        animateDaySelection(dayElement);
+      }
       
       // 부모 컴포넌트에 날짜 선택 이벤트 전달
       emit('date-selected', day.date);
@@ -878,6 +904,170 @@ export default {
     const closeProposalModal = () => {
       showProposalModal.value = false;
       selectedProposal.value = null;
+    };
+    
+    // 드래그 앤 드롭 함수들
+    const startDrag = (event, proposal) => {
+      draggingProposal.value = proposal;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', proposal.id);
+      
+      // 드래그 중인 요소에 스타일 적용
+      event.target.style.opacity = '0.5';
+    };
+    
+    const endDrag = (event) => {
+      draggingProposal.value = null;
+      dragOverDay.value = null;
+      event.target.style.opacity = '1';
+    };
+    
+    const dropProposal = async (event, targetDate) => {
+      event.preventDefault();
+      
+      if (!draggingProposal.value) return;
+      
+      // 주말이나 공휴일에는 드롭 불가
+      const targetDay = calendarDays.value.find(day => day.date === targetDate);
+      if (targetDay?.isWeekendOrHoliday) {
+        alert('주말이나 공휴일에는 제안을 이동할 수 없습니다.');
+        return;
+      }
+      
+      // 드롭 애니메이션
+      const proposalElement = event.target.closest('.proposal-item');
+      const targetElement = document.querySelector(`[data-date="${targetDate}"]`);
+      
+      if (proposalElement && targetElement) {
+        await animateProposalMove(proposalElement, targetElement);
+      }
+      
+      // 제안 날짜 업데이트
+      const proposalIndex = proposals.value.findIndex(p => p.id === draggingProposal.value.id);
+      if (proposalIndex !== -1) {
+        proposals.value[proposalIndex].date = targetDate;
+        console.log(`제안이 ${targetDate}로 이동되었습니다.`);
+      }
+      
+      draggingProposal.value = null;
+      dragOverDay.value = null;
+    };
+    
+    // 애니메이션 함수들
+    const animateCalendarTransition = async (direction = 'next') => {
+      if (isAnimating.value) return;
+      isAnimating.value = true;
+      
+      const daysContainer = document.querySelector('.days-container');
+      if (!daysContainer) return;
+      
+      const tl = gsap.timeline();
+      
+      // 현재 캘린더를 슬라이드 아웃
+      tl.to(daysContainer, {
+        x: direction === 'next' ? '-100%' : '100%',
+        opacity: 0.3,
+        duration: 0.3,
+        ease: 'power2.inOut'
+      });
+      
+      // 새 캘린더를 슬라이드 인
+      tl.fromTo(daysContainer, {
+        x: direction === 'next' ? '100%' : '-100%',
+        opacity: 0.3
+      }, {
+        x: 0,
+        opacity: 1,
+        duration: 0.3,
+        ease: 'power2.inOut'
+      });
+      
+      await tl.play();
+      isAnimating.value = false;
+    };
+    
+    const animateDaySelection = (dayElement) => {
+      if (!dayElement) return;
+      
+      gsap.fromTo(dayElement, {
+        scale: 1,
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)'
+      }, {
+        scale: 1.05,
+        boxShadow: '0 8px 25px rgba(59, 130, 246, 0.3)',
+        duration: 0.2,
+        ease: 'back.out(1.7)',
+        yoyo: true,
+        repeat: 1
+      });
+    };
+    
+    const animateProposalMove = (proposalElement, targetElement) => {
+      if (!proposalElement || !targetElement) return;
+      
+      const tl = gsap.timeline();
+      
+      // 제안 아이템을 타겟 위치로 이동
+      tl.to(proposalElement, {
+        x: targetElement.offsetLeft - proposalElement.offsetLeft,
+        y: targetElement.offsetTop - proposalElement.offsetTop,
+        duration: 0.5,
+        ease: 'power2.inOut'
+      });
+      
+      // 페이드 아웃 후 원래 위치로 복귀
+      tl.to(proposalElement, {
+        opacity: 0,
+        scale: 0.8,
+        duration: 0.2,
+        ease: 'power2.inOut'
+      });
+      
+      tl.set(proposalElement, {
+        x: 0,
+        y: 0,
+        opacity: 1,
+        scale: 1
+      });
+    };
+    
+    const animateStatusChange = (statusElement) => {
+      if (!statusElement) return;
+      
+      gsap.fromTo(statusElement, {
+        scale: 0.8,
+        opacity: 0.5
+      }, {
+        scale: 1.2,
+        opacity: 1,
+        duration: 0.3,
+        ease: 'back.out(1.7)',
+        yoyo: true,
+        repeat: 1
+      });
+    };
+    
+    const animatePanelSlide = (panelElement, direction = 'in') => {
+      if (!panelElement) return;
+      
+      if (direction === 'in') {
+        gsap.fromTo(panelElement, {
+          x: '100%',
+          opacity: 0
+        }, {
+          x: 0,
+          opacity: 1,
+          duration: 0.4,
+          ease: 'power2.out'
+        });
+      } else {
+        gsap.to(panelElement, {
+          x: '100%',
+          opacity: 0,
+          duration: 0.3,
+          ease: 'power2.in'
+        });
+      }
     };
     
     // 컴포넌트 마운트 시 초기화
@@ -1061,7 +1251,21 @@ export default {
       editMemberStatus,
       closeStatusModal,
       saveStatus,
-      saveMemo
+      saveMemo,
+      // 드래그 앤 드롭
+      draggingProposal,
+      dragOverDay,
+      startDrag,
+      endDrag,
+      dropProposal,
+      // 애니메이션
+      calendarRef,
+      isAnimating,
+      animateCalendarTransition,
+      animateDaySelection,
+      animateProposalMove,
+      animateStatusChange,
+      animatePanelSlide
     };
   }
 };
@@ -2209,6 +2413,162 @@ export default {
     bottom: 0;
     width: 100%;
     border-left: none;
+  }
+}
+
+/* 드래그 앤 드롭 스타일 */
+.proposal-item {
+  position: relative;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.proposal-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.proposal-item.dragging {
+  opacity: 0.5;
+  transform: rotate(5deg);
+  cursor: grabbing;
+}
+
+.drag-handle {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  cursor: grab;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.proposal-item:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* 드롭 영역 하이라이트 */
+.day-card.drag-over {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border: 2px dashed #3b82f6;
+  transform: scale(1.02);
+}
+
+.day-card.drag-over .day-number {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+/* 드래그 중일 때 다른 요소들 비활성화 */
+.modern-calendar.dragging .day-card:not(.drag-over) {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* 드래그 중인 제안 아이템 스타일 */
+.proposal-item.dragging {
+  z-index: 1000;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  border: 2px solid #3b82f6;
+}
+
+/* 애니메이션 관련 스타일 */
+.days-container {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.day-card {
+  transition: all 0.2s ease;
+}
+
+.day-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.day-card.selected {
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+}
+
+.proposal-item {
+  transition: all 0.2s ease;
+}
+
+.member-status {
+  transition: all 0.2s ease;
+}
+
+.member-status:hover {
+  transform: scale(1.1);
+}
+
+/* 페이드 인 애니메이션 */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+/* 슬라이드 애니메이션 */
+.slide-enter-active, .slide-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.slide-enter-from {
+  transform: translateX(100%);
+}
+
+.slide-leave-to {
+  transform: translateX(-100%);
+}
+
+/* 스케일 애니메이션 */
+.scale-enter-active, .scale-leave-active {
+  transition: transform 0.2s ease;
+}
+
+.scale-enter-from, .scale-leave-to {
+  transform: scale(0.8);
+}
+
+/* 로딩 애니메이션 */
+.loading-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 50%;
+  border-top-color: #3b82f6;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 펄스 애니메이션 */
+.pulse {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }
 </style>
