@@ -11,12 +11,26 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-console.log("📌 Firestore 환경 변수 확인:", firebaseConfig);  // ✅ 환경 변수 출력
+// 환경변수 검증
+const requiredEnvVars = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN', 
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID'
+];
+
+const missingVars = requiredEnvVars.filter(envVar => !import.meta.env[envVar]);
+if (missingVars.length > 0) {
+  console.error("Firebase 환경변수 누락:", missingVars);
+  throw new Error(`Firebase 설정에 필요한 환경변수가 누락되었습니다: ${missingVars.join(', ')}`);
+}
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-console.log("📌 Firestore DB 객체 확인:", db);  // ✅ Firestore가 정상적으로 초기화되었는지 확인
+console.log("Firebase 초기화 완료");
 
 export { db, auth };

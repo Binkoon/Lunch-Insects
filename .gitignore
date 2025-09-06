@@ -31,3 +31,53 @@ coverage
 
 # API Key 보호
 .env
+.env.local
+.env.production
+.env.development
+
+# IDE 설정
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+
+# 로그 파일
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 임시 파일
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# 빌드 결과물
+dist/
+dist-ssr/
+build/
+out/
+
+# 테스트 커버리지
+coverage/
+.nyc_output/
+
+# 캐시
+.cache/
+.parcel-cache/
+.eslintcache
+
+# 패키지 매니저
+node_modules/
+.pnpm-store/
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# 환경별 설정
+*.local

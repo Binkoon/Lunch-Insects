@@ -1,52 +1,112 @@
-# 🍽️ 식충이 캘린더 (Lunch-Insects)  
+# 식충이 캘린더 (Lunch-Insects)
 
-네이버 지도 API를 활용한 **점심 식사 기록 및 거리 계산 프로젝트**!  
-점심시간(75분) 내에서 이동 시간을 계산하고, 남은 휴식 시간을 표시해줍니다.  
-
----
-
-## 🚀 1. 프로젝트 개요  
-이 프로젝트는 팀원들이 어디에서 점심을 먹었는지 기록하고,  
-**네이버 지도 API**를 활용해 도보 이동 시간과 거리를 계산하여 **최적의 점심 장소**를 추천합니다.  
-또한, **남은 점심시간**을 계산하여 얼마나 여유롭게 쉴 수 있는지도 보여줍니다. 😎  
+Vue.js와 Firebase를 활용한 **스마트한 점심 관리 플랫폼**!  
+팀원들과 함께하는 점심 식사 계획 및 추천 시스템입니다.
 
 ---
 
-## ✨ 2. 주요 기능  
+## 프로젝트 개요
 
-✔ **주간 캘린더를 통해 일정이 있는 사람, 일정이 없는 사람을 구별하여 표시!**
-
-✔ **지도에 회사 주변 음식점 마커 표시**  
-✔ **네이버 Geocoding API**로 주소 → 위경도 변환  
-✔ **네이버 Directions API**로 도보 이동 시간 및 거리 계산  
-✔ **음식 준비 시간 (5~10분 랜덤) 반영**  
-✔ **점심시간(75분)에서 이동/준비 시간 차감 후, 남은 휴식 시간 계산**  
-✔ **어떤 음식점을 안간지 오래됐는지 쿨타임 주기를 보여줌**
-
-✔ **점메추 랜덤박스!**
+이 프로젝트는 팀원들이 점심을 어디서 먹을지 계획하고,  
+**Firebase**를 활용해 그룹 관리, 멤버 상태 추적, 음식점 추천을 제공합니다.  
+또한, **월별 소비 분석**을 통해 개인 및 그룹의 식비 관리를 도와줍니다.
 
 ---
 
-## 📌 3. 실행 방법  
+## 주요 기능
 
-### 💻 1️⃣ **프로젝트 클론 및 설치**  
+- **그룹 캘린더**: 멤버별 일정 상태 (식사, 휴가, 약속) 관리
+- **음식점 추천**: 근처 맛집 검색 및 거리/평점 기반 추천
+- **점심 제안 시스템**: 멤버들이 음식점을 제안하고 투표하는 기능
+- **소비 분석**: 식권포인트/현금 사용 내역 및 월별 그래프
+- **그룹 관리**: 초대 코드, 이메일 초대, 멤버 관리
+- **반응형 디자인**: 모바일/데스크톱 최적화
+
+---
+
+## 기술 스택
+
+- **Frontend**: Vue.js 3, Vite, Vue Router
+- **Backend**: Firebase (Authentication, Firestore)
+- **UI/UX**: CSS3, Glassmorphism, 반응형 디자인
+- **애니메이션**: @vueuse/motion, GSAP
+- **개발 도구**: ESLint, Prettier
+
+---
+
+## 실행 방법
+
+### 1. 프로젝트 클론 및 설치
 ```bash
 git clone https://github.com/your-repo/lunch-insects.git
 cd lunch-insects
 npm install
 ```
-### 🛠️ 2️⃣ 환경 변수 설정 (.env)
-.env 파일을 만들고 네이버 API 키를 설정합니다.
+
+### 2. 환경 변수 설정 (.env)
+```bash
+# Firebase 설정
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+
+# 개발용 계정 (선택사항)
+DEV_USER_EMAIL=test1@example.com
+DEV_USER_PASSWORD=test1
 ```
-VITE_NAVER_MAP_CLIENT_ID=YOUR_CLIENT_ID
-VITE_NAVER_MAP_CLIENT_SECRET=YOUR_CLIENT_SECRET
+
+### 3. 개발 서버 실행
+```bash
+npm run dev
+```
+
+### 4. 빌드
+```bash
+npm run build
 ```
 
 ---
-## 🗺️ 4. 주요 화면  (주요 화면은 디테일한 레이아웃 배치 작업 완료 후 첨부 예정)
-📍 메인 화면 (네이버 지도 + 마커)
 
-🔵 파란색 마커: 음식점 위치
-🔴 빨간색 마커: 회사(기본 위치)
-🍽️ 마커 클릭 시 표시되는 정보
-✅ 도보 이동 시간 + 음식 준비 시간 + 남은 시간
+## 프로젝트 구조
+
+```
+src/
+├── pages/              # 페이지 컴포넌트
+│   ├── Intro.vue      # 랜딩 페이지
+│   ├── Auth.vue       # 로그인/회원가입
+│   ├── HomeNew.vue    # 메인 페이지
+│   ├── About.vue      # 소개 페이지
+│   └── Onboarding.vue # 온보딩 페이지
+├── components/         # Vue 컴포넌트
+│   ├── Common/        # 공통 컴포넌트
+│   ├── Features/      # 기능별 컴포넌트
+│   └── ui/           # UI 컴포넌트 (atoms, molecules)
+├── layouts/           # 레이아웃 컴포넌트
+├── services/          # 서비스 레이어 (Firebase 등)
+├── composables/       # Vue 3 Composition API 로직
+├── stores/           # 상태 관리 (Pinia 등)
+├── router/           # Vue Router 설정
+├── types/            # TypeScript 타입 정의
+├── utils/            # 유틸리티 함수
+├── styles/           # 전역 스타일
+└── assets/           # 정적 자산
+```
+
+---
+
+## 개발 환경
+
+- **Node.js**: 18.x 이상
+- **npm**: 9.x 이상
+- **Firebase**: v9+ (Modular SDK)
+
+---
+
+## 라이선스
+
+MIT License
+
+---
