@@ -332,152 +332,133 @@
 
     <!-- 멤버 상태 편집 모달 (전체 화면 오버레이) -->
     <Teleport to="body">
-      <div v-if="showStatusModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-          <div class="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-            <h3 class="text-xl font-bold text-gray-900">
-              {{ modalData.member?.name }} - {{ modalData.date }} 상태 편집
-            </h3>
-            <button @click="closeStatusModal" class="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+      <div v-if="showStatusModal" class="modal-overlay">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>{{ modalData.member?.name }} - {{ modalData.date }} 상태 편집</h3>
+            <button @click="closeStatusModal" class="close-btn">×</button>
           </div>
           
-          <div class="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
+          <div class="modal-body">
             <!-- 다른 멤버들의 상태 표시 -->
-            <div class="mb-8">
-              <h4 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <div class="members-status-section">
+              <h4 class="section-title">
                 👥 팀원들 상태
               </h4>
-              <div class="space-y-3 max-h-60 overflow-y-auto p-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200">
+              <div class="members-list">
                 <div 
                   v-for="member in modalData.allMembers" 
                   :key="member.id"
-                  class="flex items-center gap-4 p-4 bg-white rounded-lg border-2 transition-all hover:shadow-md"
+                  class="member-item"
                   :class="getMemberStatusClass(modalData.date, member.id)"
                 >
-                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 border-white"
+                  <div class="member-avatar"
                        :style="{ backgroundColor: member.color }">
                     {{ member.name.charAt(0) }}
                   </div>
-                  <div class="flex-1">
-                    <div class="font-semibold text-gray-900">{{ member.name }}</div>
-                    <div class="text-sm font-medium text-gray-600">{{ getMemberStatusText(modalData.date, member.id) }}</div>
+                  <div class="member-info">
+                    <div class="member-name">{{ member.name }}</div>
+                    <div class="member-status">{{ getMemberStatusText(modalData.date, member.id) }}</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div class="h-0.5 bg-gradient-to-r from-transparent via-gray-300 to-transparent mb-8"></div>
+            <div class="section-divider"></div>
             
-            <div class="mb-6">
-              <h4 class="text-lg font-bold text-gray-900 mb-5 flex items-center gap-2">
+            <div class="status-setting-section">
+              <h4 class="section-title">
                 ⚙️ 내 상태 설정
               </h4>
-              <div class="grid grid-cols-2 gap-4">
+              <div class="status-options">
                 <label 
                   v-for="status in statusOptions" 
                   :key="status.value"
-                  class="flex items-center gap-4 p-5 border-2 border-gray-200 rounded-xl cursor-pointer transition-all hover:border-blue-500 hover:bg-blue-50 hover:-translate-y-0.5 hover:shadow-lg"
-                  :class="{ 'border-blue-500 bg-blue-50 shadow-lg': editingStatus === status.value }"
+                  class="status-option"
+                  :class="{ 'selected': editingStatus === status.value }"
                 >
                   <input 
                     type="radio" 
                     :value="status.value" 
                     v-model="editingStatus"
-                    class="w-5 h-5 accent-blue-500"
                   />
-                  <span class="text-2xl drop-shadow">{{ status.icon }}</span>
-                  <span class="font-semibold text-gray-900">{{ status.label }}</span>
+                  <span class="status-icon">{{ status.icon }}</span>
+                  <span class="status-label">{{ status.label }}</span>
                 </label>
               </div>
             </div>
             
-            <!-- 가능 선택 시 제안 입력 -->
-            <div v-if="editingStatus === 'available'" class="space-y-6">
-              <div>
-                <label class="block text-base font-semibold text-gray-900 mb-3">음식점 제안</label>
-                <div class="relative">
+            <!-- 가능 선택 시 방문 음식점 입력 -->
+            <div v-if="editingStatus === 'available'" class="restaurant-visit-section">
+              <div class="restaurant-input-wrapper">
+                <label class="input-label">방문한 음식점</label>
+                <div class="restaurant-dropdown">
                   <input 
-                    class="w-full p-4 border-2 border-gray-200 rounded-xl text-base transition-all focus:border-blue-500 focus:shadow-lg bg-gradient-to-br from-white to-gray-50"
+                    class="restaurant-input"
                     v-model="mealDetails.restaurant"
                     placeholder="음식점 검색"
-                    @focus="dropdownOpen = true"
-                    @input="dropdownOpen = true"
-                    @blur="setTimeout(() => dropdownOpen = false, 150)"
+                    @focus="handleInputFocus"
+                    @input="handleInputChange"
+                    @blur="handleInputBlur"
                   />
                   <div v-if="dropdownOpen && modalData.restaurants?.length" 
-                       class="absolute left-0 right-0 z-30 bg-white border-2 border-gray-200 rounded-xl mt-2 max-h-60 overflow-auto shadow-2xl">
-                    <div
-                      v-for="r in modalData.restaurants.filter(rest => rest.toLowerCase().includes((mealDetails.restaurant || '').toLowerCase()))"
-                      :key="r"
-                      class="p-4 cursor-pointer transition-all hover:bg-blue-50 border-b border-gray-100 last:border-b-0 font-medium"
-                      @mousedown.prevent="mealDetails.restaurant = r; dropdownOpen = false"
-                    >
-                      {{ r }}
+                       class="dropdown-list"
+                       @mousedown.prevent>
+                    <div class="dropdown-header">
+                      <span class="dropdown-title">🔍 음식점 검색 결과</span>
+                      <button @click="closeDropdown" class="dropdown-close">×</button>
+                    </div>
+                    <div class="dropdown-items">
+                      <div
+                        v-for="r in modalFilteredRestaurants"
+                        :key="r"
+                        class="dropdown-item"
+                        @click="selectModalRestaurant(r)"
+                      >
+                        <span class="restaurant-icon">🍽️</span>
+                        <span class="restaurant-name">{{ r }}</span>
+                      </div>
+                      <div v-if="modalFilteredRestaurants.length === 0 && mealDetails.restaurant" class="dropdown-empty">
+                        <span class="empty-icon">🔍</span>
+                        <span class="empty-text">검색 결과가 없습니다</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div class="text-sm text-gray-600 mt-2">목록에 없으면 그대로 입력하세요.</div>
-              </div>
-              
-              <div>
-                <label class="block text-base font-semibold text-gray-900 mb-3">메뉴</label>
-                <input 
-                  v-model="mealDetails.menu"
-                  placeholder="먹은 메뉴를 입력하세요"
-                  class="w-full p-4 border-2 border-gray-200 rounded-xl text-base transition-all focus:border-blue-500 focus:shadow-lg bg-gradient-to-br from-white to-gray-50"
-                />
-              </div>
-              
-              <div>
-                <label class="block text-base font-semibold text-gray-900 mb-3">참여 멤버</label>
-                <div class="grid grid-cols-2 gap-3">
-                  <label 
-                    v-for="member in modalData.allMembers" 
-                    :key="member.id"
-                    class="flex items-center gap-3 text-base cursor-pointer"
-                  >
-                    <input 
-                      type="checkbox" 
-                      :value="member.id" 
-                      v-model="mealDetails.participants"
-                      class="w-4 h-4 accent-blue-500"
-                    />
-                    {{ member.name }}
-                  </label>
-                </div>
+                <div class="input-hint">목록에 없으면 그대로 입력하세요.</div>
               </div>
             </div>
             
             <!-- 휴가 정보 -->
-            <div v-if="editingStatus === 'vacation'" class="space-y-6">
-              <div>
-                <label class="block text-base font-semibold text-gray-900 mb-3">휴가 사유</label>
+            <div v-if="editingStatus === 'vacation'" class="detail-input-section">
+              <div class="detail-input-wrapper">
+                <label class="input-label">휴가 사유</label>
                 <input 
                   v-model="vacationDetails.reason"
                   placeholder="휴가 사유를 입력하세요"
-                  class="w-full p-4 border-2 border-gray-200 rounded-xl text-base transition-all focus:border-blue-500 focus:shadow-lg bg-gradient-to-br from-white to-gray-50"
+                  class="detail-input"
                 />
               </div>
             </div>
             
             <!-- 다른 약속 정보 -->
-            <div v-if="editingStatus === 'other'" class="space-y-6">
-              <div>
-                <label class="block text-base font-semibold text-gray-900 mb-3">약속 내용</label>
+            <div v-if="editingStatus === 'other'" class="detail-input-section">
+              <div class="detail-input-wrapper">
+                <label class="input-label">약속 내용</label>
                 <input 
                   v-model="otherDetails.description"
                   placeholder="약속 내용을 입력하세요"
-                  class="w-full p-4 border-2 border-gray-200 rounded-xl text-base transition-all focus:border-blue-500 focus:shadow-lg bg-gradient-to-br from-white to-gray-50"
+                  class="detail-input"
                 />
               </div>
             </div>
           </div>
           
-          <div class="flex justify-end gap-4 p-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-            <button @click="closeStatusModal" class="px-6 py-3 bg-gradient-to-br from-gray-100 to-gray-200 text-gray-700 font-semibold rounded-xl hover:from-gray-200 hover:to-gray-300 hover:-translate-y-0.5 transition-all shadow-lg">
+          <div class="modal-footer">
+            <button @click="closeStatusModal" class="btn-cancel">
               취소
             </button>
-            <button @click="saveStatus" class="px-6 py-3 bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-blue-700 hover:-translate-y-0.5 transition-all shadow-lg">
+            <button @click="saveStatus" class="btn-save">
               저장
             </button>
           </div>
@@ -530,9 +511,7 @@ export default {
     const modalData = ref({});
     const editingStatus = ref('');
     const mealDetails = ref({
-      restaurant: '',
-      menu: '',
-      participants: []
+      restaurant: ''
     });
     const vacationDetails = ref({
       reason: ''
@@ -541,6 +520,40 @@ export default {
       description: ''
     });
     const dropdownOpen = ref(false);
+    
+    // 모달용 필터링된 음식점 목록
+    const modalFilteredRestaurants = computed(() => {
+      if (!modalData.value.restaurants || !mealDetails.value.restaurant) {
+        return modalData.value.restaurants || [];
+      }
+      return modalData.value.restaurants.filter(restaurant => 
+        restaurant.toLowerCase().includes(mealDetails.value.restaurant.toLowerCase())
+      );
+    });
+    
+    // 드롭다운 핸들러 함수들
+    const handleInputFocus = () => {
+      dropdownOpen.value = true;
+    };
+    
+    const handleInputChange = () => {
+      dropdownOpen.value = true;
+    };
+    
+    const handleInputBlur = () => {
+      setTimeout(() => {
+        dropdownOpen.value = false;
+      }, 200);
+    };
+    
+    const closeDropdown = () => {
+      dropdownOpen.value = false;
+    };
+    
+    const selectModalRestaurant = (restaurant) => {
+      mealDetails.value.restaurant = restaurant;
+      dropdownOpen.value = false;
+    };
     
     const currentGroup = ref(null);
     
@@ -1357,14 +1370,15 @@ export default {
       editingStatus.value = data.currentStatus;
       showStatusModal.value = true;
       
+      // body 스크롤 방지
+      document.body.style.overflow = 'hidden';
+      
       // 상태별 기존 데이터 로드
       const existingStatus = data.memberStatuses[data.date]?.[data.member.id];
       if (existingStatus) {
         if (existingStatus.status === 'available') {
           mealDetails.value = {
-            restaurant: existingStatus.details.restaurant || '',
-            menu: existingStatus.details.menu || '',
-            participants: existingStatus.details.participants || []
+            restaurant: existingStatus.details.restaurant || ''
           };
         } else if (existingStatus.status === 'vacation') {
           vacationDetails.value = {
@@ -1377,7 +1391,7 @@ export default {
         }
       } else {
         // 기본값으로 초기화
-        mealDetails.value = { restaurant: '', menu: '', participants: [] };
+        mealDetails.value = { restaurant: '' };
         vacationDetails.value = { reason: '' };
         otherDetails.value = { description: '' };
       }
@@ -1389,26 +1403,48 @@ export default {
       showStatusModal.value = false;
       modalData.value = {};
       editingStatus.value = '';
+      mealDetails.value = { restaurant: '' };
+      vacationDetails.value = { reason: '' };
+      otherDetails.value = { description: '' };
+      dropdownOpen.value = false;
+      
+      // body 스크롤 복원
+      document.body.style.overflow = '';
     };
 
     const saveStatus = async () => {
-      // 여기서 실제 저장 로직 구현
-      console.log('상태 저장:', {
-        member: modalData.value.member,
-        date: modalData.value.date,
-        status: editingStatus.value,
-        details: getStatusDetails()
-      });
-      
-      closeStatusModal();
+      try {
+        console.log('상태 저장 중...', {
+          member: modalData.value.member,
+          date: modalData.value.date,
+          status: editingStatus.value,
+          details: getStatusDetails()
+        });
+
+        // Firebase에 상태 저장
+        const { saveMemberStatus } = await import('@/services/firebaseDBv2.js');
+        
+        await saveMemberStatus(
+          modalData.value.groupId,
+          modalData.value.member.id,
+          modalData.value.date,
+          editingStatus.value,
+          getStatusDetails()
+        );
+
+        console.log('✅ 상태 저장 완료');
+        
+        closeStatusModal();
+      } catch (error) {
+        console.error('❌ 상태 저장 실패:', error);
+        alert('상태 저장에 실패했습니다. 다시 시도해주세요.');
+      }
     };
 
     const getStatusDetails = () => {
       if (editingStatus.value === 'available') {
         return {
-          restaurant: mealDetails.value.restaurant,
-          menu: mealDetails.value.menu,
-          participants: mealDetails.value.participants
+          restaurant: mealDetails.value.restaurant
         };
       } else if (editingStatus.value === 'vacation') {
         return {
@@ -1446,7 +1482,9 @@ export default {
     };
 
     const handleStatusUpdated = () => {
-      console.log('상태 업데이트됨');
+      console.log('상태 업데이트됨 - 캘린더 새로고침');
+      // 캘린더가 자동으로 새로고침되도록 트리거
+      // GroupCalendar 컴포넌트의 loadMemberStatuses가 호출됨
     };
 
     onUnmounted(() => {
@@ -1522,7 +1560,13 @@ export default {
       saveStatus,
       getMemberStatusClass,
       getMemberStatusText,
-      handleStatusUpdated
+      handleStatusUpdated,
+      modalFilteredRestaurants,
+      handleInputFocus,
+      handleInputChange,
+      handleInputBlur,
+      closeDropdown,
+      selectModalRestaurant
     };
   }
 };
@@ -2469,5 +2513,423 @@ export default {
   .restaurant-section {
     padding: 1rem;
   }
+}
+
+/* 모달 스타일 */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 1rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  max-width: 48rem;
+  width: 100%;
+  max-height: 85vh;
+  overflow: hidden;
+  animation: modalSlideIn 0.3s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+}
+
+.modal-header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* 스크롤바 스타일 */
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 모달 내부 컨텐츠 스타일 */
+.members-status-section {
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #1f2937;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.members-list {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  max-height: 15rem;
+  overflow-y: auto;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s;
+}
+
+.member-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.member-item:last-child {
+  margin-bottom: 0;
+}
+
+.member-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.member-info {
+  flex: 1;
+}
+
+.member-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.member-status {
+  font-size: 0.9rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d1d5db, transparent);
+  margin: 2rem 0;
+}
+
+.status-setting-section {
+  margin-bottom: 1.5rem;
+}
+
+.status-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.status-option {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.status-option:hover {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.status-option.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.status-option input[type="radio"] {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.status-icon {
+  font-size: 1.5rem;
+}
+
+.status-label {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* 음식점 방문 및 상세 입력 스타일 */
+.restaurant-visit-section,
+.detail-input-section {
+  margin-top: 1.5rem;
+}
+
+.restaurant-input-wrapper,
+.detail-input-wrapper {
+  margin-bottom: 1.5rem;
+}
+
+.input-label {
+  display: block;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.75rem;
+}
+
+.restaurant-dropdown {
+  position: relative;
+}
+
+.restaurant-input,
+.detail-input {
+  width: 100%;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  background: linear-gradient(135deg, #ffffff, #f8fafc);
+  transition: all 0.2s;
+}
+
+.restaurant-input:focus,
+.detail-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.dropdown-list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 50;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 1rem;
+  margin-top: 0.5rem;
+  max-height: 20rem;
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(16px);
+}
+
+.dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #e5e7eb;
+  font-weight: 600;
+  color: #374151;
+}
+
+.dropdown-title {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.dropdown-close {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 0.375rem;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.dropdown-close:hover {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+.dropdown-items {
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.dropdown-item:hover {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  transform: translateX(0.25rem);
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.restaurant-icon {
+  font-size: 1.25rem;
+  opacity: 0.7;
+}
+
+.restaurant-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.dropdown-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2rem 1.25rem;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+.empty-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.input-hint {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 0.5rem;
+}
+
+/* 모달 푸터 */
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  flex-shrink: 0;
+}
+
+.btn-cancel,
+.btn-save {
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+}
+
+.btn-cancel {
+  background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+  color: #374151;
+}
+
+.btn-cancel:hover {
+  background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-save {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
+
+.btn-save:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
 </style>
