@@ -15,24 +15,11 @@ import {
   orderBy, 
   limit,
   serverTimestamp,
-  Timestamp 
+  Timestamp,
+  setDoc
 } from 'firebase/firestore';
 import { db } from './firebase.js';
-
-// 컬렉션 참조
-const COLLECTIONS = {
-  USERS: 'users',
-  GROUPS: 'groups',
-  RESTAURANTS: 'restaurants',
-  SCHEDULES: 'schedules',
-  MENU_RECORDS: 'menuRecords',
-  NOTIFICATIONS: 'notifications',
-  GROUP_INVITES: 'groupInvites',
-  EMAIL_INVITES: 'emailInvites',
-  USER_PREFERENCES: 'userPreferences',
-  STATISTICS: 'statistics',
-  GROUP_CODES: 'groupCodes'
-};
+import { COLLECTIONS } from '../config/collections.js';
 
 // ==================== 사용자 관리 ====================
 
@@ -55,17 +42,46 @@ export const createUser = async (userData) => {
 };
 
 /**
- * 사용자 정보 조회
+ * 사용자 정보 조회 (UID 또는 email로)
  */
-export const getUser = async (userId) => {
+export const getUser = async (userIdOrEmail) => {
   try {
-    const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userId));
+    // email인지 확인 (이메일 형식 체크)
+    if (userIdOrEmail.includes('@')) {
+      return await getUserByEmail(userIdOrEmail);
+    }
+    
+    // Firebase Auth UID로 직접 문서 조회 (이제 문서 ID가 Auth UID와 일치)
+    const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userIdOrEmail));
     if (userDoc.exists()) {
+      return { id: userDoc.id, ...userDoc.data() };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('사용자 조회 실패:', error);
+    throw error;
+  }
+};
+
+/**
+ * 이메일로 사용자 정보 조회
+ */
+export const getUserByEmail = async (email) => {
+  try {
+    const usersQuery = query(
+      collection(db, COLLECTIONS.USERS),
+      where('email', '==', email)
+    );
+    const querySnapshot = await getDocs(usersQuery);
+    
+    if (!querySnapshot.empty) {
+      const userDoc = querySnapshot.docs[0];
       return { id: userDoc.id, ...userDoc.data() };
     }
     return null;
   } catch (error) {
-    console.error('사용자 조회 실패:', error);
+    console.error('이메일로 사용자 조회 실패:', error);
     throw error;
   }
 };
@@ -327,14 +343,12 @@ export const getNearbyRestaurants = async (latitude, longitude, radius = 1000) =
 };
 
 /**
- * 카테고리별 음식점 검색
+ * 모든 음식점 조회 (간단한 쿼리)
  */
-export const getRestaurantsByCategory = async (category, limitCount = 20) => {
+export const getAllRestaurants = async (limitCount = 50) => {
   try {
     const restaurantsQuery = query(
       collection(db, COLLECTIONS.RESTAURANTS),
-      where('category', '==', category),
-      orderBy('rating', 'desc'),
       limit(limitCount)
     );
     
@@ -347,8 +361,101 @@ export const getRestaurantsByCategory = async (category, limitCount = 20) => {
     
     return restaurants;
   } catch (error) {
+    console.error('음식점 조회 실패:', error);
+    throw error;
+  }
+};
+
+/**
+ * 카테고리별 음식점 검색
+ */
+export const getRestaurantsByCategory = async (category, limitCount = 20) => {
+  try {
+    const restaurantsQuery = query(
+      collection(db, COLLECTIONS.RESTAURANTS),
+      where('category', '==', category),
+      limit(limitCount)
+    );
+    
+    const querySnapshot = await getDocs(restaurantsQuery);
+    const restaurants = [];
+    
+    querySnapshot.forEach((doc) => {
+      restaurants.push({ id: doc.id, ...doc.data() });
+    });
+    
+    // 클라이언트에서 평점순으로 정렬
+    restaurants.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    
+    return restaurants;
+  } catch (error) {
     console.error('카테고리별 음식점 검색 실패:', error);
     throw error;
+  }
+};
+
+// ==================== 사용자 지출 관리 ====================
+
+/**
+ * 사용자의 이번달 지출 기록 조회
+ */
+export const getUserMonthlyExpenses = async (userId, year, month) => {
+  try {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59);
+    
+    const expensesQuery = query(
+      collection(db, COLLECTIONS.MENU_RECORDS),
+      where('userId', '==', userId),
+      where('date', '>=', startDate),
+      where('date', '<=', endDate)
+    );
+    
+    const querySnapshot = await getDocs(expensesQuery);
+    let totalTicketPoints = 0;
+    let totalCash = 0;
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      if (data.paymentMethod === 'ticket') {
+        totalTicketPoints += data.amount || 0;
+      } else if (data.paymentMethod === 'cash') {
+        totalCash += data.amount || 0;
+      }
+    });
+    
+    return {
+      ticketPoints: totalTicketPoints,
+      cash: totalCash,
+      total: totalTicketPoints + totalCash
+    };
+  } catch (error) {
+    console.error('월별 지출 조회 실패:', error);
+    return {
+      ticketPoints: 0,
+      cash: 0,
+      total: 0
+    };
+  }
+};
+
+/**
+ * 모든 사용자 조회
+ */
+export const getAllUsers = async () => {
+  try {
+    const usersQuery = query(collection(db, COLLECTIONS.USERS));
+    const querySnapshot = await getDocs(usersQuery);
+    const users = [];
+    
+    querySnapshot.forEach((doc) => {
+      users.push({ id: doc.id, ...doc.data() });
+    });
+    
+    return users;
+  } catch (error) {
+    console.error('사용자 조회 실패:', error);
+    return [];
   }
 };
 

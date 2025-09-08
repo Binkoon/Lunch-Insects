@@ -278,7 +278,6 @@ import {
 } from '@/services/firebaseDBv2';
 
 export default {
-  name: 'GroupManagement',
   props: {
     groupId: {
       type: String,

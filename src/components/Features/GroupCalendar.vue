@@ -419,12 +419,13 @@ import {
   saveMemberStatus, 
   getMemberStatus, 
   getGroupMemberStatuses, 
-  deleteMemberStatus 
+  deleteMemberStatus,
+  getGroup
 } from '@/services/firebaseDBv2.js';
 import { getCurrentUser } from '@/services/firebaseAuth.js';
+// import { mockDB, initializeMockDatabase } from '@/services/database-init.js'; // 삭제됨 - Firebase 사용
 
 export default {
-  name: 'GroupCalendar',
   props: {
     groupId: {
       type: String,
@@ -435,8 +436,11 @@ export default {
       default: () => []
     }
   },
-  emits: ['date-selected'],
+  emits: ['date-selected', 'group-loaded'],
   setup(props, { emit }) {
+    // 목업 데이터베이스 초기화
+    // initializeMockDatabase(); // 삭제됨 - Firebase 사용
+    
     // 현재 날짜 (2025년 9월로 설정)
     const currentDate = ref(new Date(2025, 8, 1)); // 2025년 9월
     const selectedDay = ref(null);
@@ -1070,52 +1074,39 @@ export default {
       }
     };
     
+    // Firebase에서 그룹 데이터 로드
+    const loadGroupData = async () => {
+      try {
+        console.log('그룹 데이터 로드 시작...', props.groupId);
+        const group = await getGroup(props.groupId);
+        console.log('그룹 데이터 로드 완료:', group);
+        
+        // 그룹 멤버 정보를 props.members에 반영
+        if (group && group.members) {
+          // 부모 컴포넌트에서 멤버 데이터를 업데이트하도록 이벤트 발생
+          emit('group-loaded', group);
+        }
+      } catch (error) {
+        console.error('그룹 데이터 로드 실패:', error);
+        // 오류 시 빈 그룹 데이터 설정
+        const defaultGroup = {
+          id: props.groupId || 'unknown',
+          name: '그룹을 불러올 수 없습니다',
+          members: []
+        };
+        emit('group-loaded', defaultGroup);
+      }
+    };
+
     // 컴포넌트 마운트 시 초기화
     onMounted(async () => {
       await loadCurrentUser();
+      await loadGroupData();
       await loadMemberStatuses();
       
-      // 목업 제안 데이터 (2025년 9월 8일과 9일)
-      proposals.value = [
-        {
-          id: 'proposal_1',
-          restaurant: {
-            id: 8,
-            name: '돈우가',
-            category: '일식',
-            distance: 7,
-            rating: 4.2,
-            priceRange: '12,000원'
-          },
-          proposer: { id: 'user1', name: '김철수' },
-          date: '2025-09-08', // 2025년 9월 8일 (특별히 평일로 처리)
-          status: 'pending',
-          votes: {
-            accepted: ['user1'],
-            rejected: []
-          },
-          createdAt: new Date()
-        },
-        {
-          id: 'proposal_2',
-          restaurant: {
-            id: 1,
-            name: '금성관',
-            category: '한식',
-            distance: 3,
-            rating: 4.2,
-            priceRange: '8,000원'
-          },
-          proposer: { id: 'user2', name: '이영희' },
-          date: '2025-09-09', // 2025년 9월 9일 월요일
-          status: 'accepted',
-          votes: {
-            accepted: ['user1', 'user2', 'user3', 'user4'],
-            rejected: []
-          },
-          createdAt: new Date()
-        }
-      ];
+      // 제안 데이터는 Firebase에서 가져오도록 수정 (현재는 빈 배열로 초기화)
+      proposals.value = [];
+      console.log('캘린더 초기화 완료');
     });
     
     // 가능한 멤버들만 필터링

@@ -9,7 +9,7 @@ import {
   sendPasswordResetEmail,
   updateProfile
 } from "firebase/auth";
-import { createUser } from "./firebaseDBv2";
+// import { createUser } from "./firebaseDBv2"; // 순환 참조 방지를 위해 주석 처리
 
 // 로그인 함수
 export const login = async (email, password) => {
@@ -49,17 +49,17 @@ export const signup = async (email, password, userData) => {
       displayName: userData.name
     });
     
-    // Firestore에 사용자 데이터 저장
-    await createUser({
-      id: user.uid,
-      email: user.email,
-      name: userData.name,
-      department: userData.department || '',
-      preferences: userData.preferences || [],
-      groups: [],
-      createdAt: new Date(),
-      lastActiveAt: new Date()
-    });
+    // Firestore에 사용자 데이터 저장 (별도 함수에서 처리)
+    // await createUser({
+    //   id: user.uid,
+    //   email: user.email,
+    //   name: userData.name,
+    //   department: userData.department || '',
+    //   preferences: userData.preferences || [],
+    //   groups: [],
+    //   createdAt: new Date(),
+    //   lastActiveAt: new Date()
+    // });
     
     console.log("회원가입 성공:", user.email);
     return user;

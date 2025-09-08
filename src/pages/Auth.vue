@@ -1,5 +1,5 @@
 <template>
-  <div class="auth-page">
+  <div class="auth-page" :class="{ 'fade-in': pageLoaded }">
     <!-- 배경 -->
     <div class="auth-background">
       <div class="background-image"></div>
@@ -8,6 +8,14 @@
 
     <!-- 메인 콘텐츠 -->
     <div class="auth-container">
+      <!-- 뒤로가기 버튼 -->
+      <div class="back-button-container">
+        <button class="back-button" @click="goToHome">
+          <i class="back-icon">←</i>
+          홈으로 돌아가기
+        </button>
+      </div>
+
       <!-- 로고 섹션 -->
       <div class="auth-header">
         <div class="logo-section">
@@ -238,14 +246,6 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label>부서/팀 (선택사항)</label>
-              <input
-                v-model="signupData.department"
-                type="text"
-                placeholder="개발팀"
-              />
-            </div>
 
             <div class="form-group">
               <label>선호 음식 카테고리</label>
@@ -316,7 +316,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 // import { login, signup, resetPassword, devAutoLogin } from '@/services/firebaseAuth';
 
@@ -331,6 +331,7 @@ export default {
     // 로딩 상태
     const loading = ref(false);
     const showPassword = ref(false);
+    const pageLoaded = ref(false);
     
     // 로그인 데이터
     const loginData = ref({
@@ -345,7 +346,6 @@ export default {
       password: '',
       confirmPassword: '',
       name: '',
-      department: '',
       preferences: [],
       agreeTerms: false
     });
@@ -434,7 +434,6 @@ export default {
         password: '', 
         confirmPassword: '', 
         name: '', 
-        department: '', 
         preferences: [], 
         agreeTerms: false 
       };
@@ -630,6 +629,39 @@ export default {
         loading.value = false;
       }
     };
+
+    // 홈으로 돌아가기
+    const goToHome = () => {
+      router.push('/');
+    };
+    
+    // 페이지 로드 시 섹션별 나타남 애니메이션 효과
+    onMounted(() => {
+      // 각 섹션을 순차적으로 나타나게 하기
+      const sections = [
+        '.back-button-container',
+        '.auth-header',
+        '.auth-form-container'
+      ];
+      
+      sections.forEach((selector, index) => {
+        const element = document.querySelector(selector);
+        if (element) {
+          // 초기 상태 설정
+          element.style.transition = 'transform 0.5s ease-out, opacity 0.5s ease-out';
+          element.style.transform = 'translateY(30px) scale(0.95)';
+          element.style.opacity = '0';
+          
+          // 순차적으로 나타나게 하기
+          setTimeout(() => {
+            element.style.transform = 'translateY(0) scale(1)';
+            element.style.opacity = '1';
+          }, index * 150 + 100); // 150ms 간격으로 순차 실행
+        }
+      });
+      
+      pageLoaded.value = true;
+    });
     
     return {
       authMode,
@@ -657,7 +689,9 @@ export default {
       devSignup,
       devLogin,
       handleLogin,
-      handleSignup
+      handleSignup,
+      goToHome,
+      pageLoaded
     };
   }
 };
@@ -666,7 +700,7 @@ export default {
 <style scoped>
 .auth-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: url('@/assets/loginPage.jpg') center/cover no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -675,37 +709,17 @@ export default {
   overflow: hidden;
 }
 
-.auth-background {
+.auth-page::before {
+  content: '';
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
   z-index: 1;
 }
 
-.background-image {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: url('@/assets/header_img_food2.jpg') center/cover no-repeat;
-  opacity: 0.3;
-}
-
-.gradient-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(
-    135deg,
-    rgba(102, 126, 234, 0.8) 0%,
-    rgba(118, 75, 162, 0.8) 100%
-  );
-}
 
 .auth-container {
   position: relative;
@@ -716,6 +730,48 @@ export default {
   grid-template-columns: 1fr 1fr;
   gap: 4rem;
   align-items: center;
+}
+
+/* 섹션별 애니메이션을 위한 기본 스타일 */
+.back-button-container,
+.auth-header,
+.auth-form-container {
+  will-change: transform, opacity;
+}
+
+.back-button-container {
+  position: absolute;
+  top: 2rem;
+  left: 2rem;
+  z-index: 3;
+}
+
+.back-button {
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 2rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.back-icon {
+  font-size: 1.2rem;
+  font-weight: bold;
 }
 
 .auth-header {
@@ -775,11 +831,34 @@ export default {
 }
 
 .auth-form-container {
-  background: white;
-  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 24px;
   padding: 3rem;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
+  box-shadow: 
+    0 25px 50px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-form-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  border-radius: 24px;
+  z-index: -1;
 }
 
 .auth-form {
@@ -794,14 +873,17 @@ export default {
 .form-header h2 {
   font-size: 2rem;
   font-weight: 700;
-  color: var(--text-primary);
+  color: #ffffff;
   margin: 0 0 0.5rem 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
 }
 
 .form-header p {
   font-size: 1rem;
-  color: var(--text-secondary);
+  color: #ffffff;
+  font-weight: 500;
   margin: 0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 .dev-info {
@@ -934,25 +1016,42 @@ export default {
   display: block;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-primary);
+  color: #ffffff;
   margin-bottom: 0.5rem;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 .form-group input {
   width: 100%;
   padding: 1rem;
-  border: 2px solid var(--border-light);
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
   font-size: 1rem;
   transition: all 0.3s ease;
-  background: var(--bg-secondary);
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.form-group input::placeholder {
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 0 3px rgba(255, 255, 255, 0.1),
+    0 4px 8px rgba(0, 0, 0, 0.15);
 }
+
 
 .form-group input.error {
   border-color: var(--color-danger);
@@ -981,9 +1080,11 @@ export default {
 }
 
 .error-message {
-  color: var(--color-danger);
+  color: #fca5a5;
   font-size: 0.8rem;
+  font-weight: 600;
   margin-top: 0.5rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .general-error {
@@ -1044,7 +1145,9 @@ export default {
   gap: 0.5rem;
   cursor: pointer;
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  color: #ffffff;
+  font-weight: 500;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -1053,10 +1156,11 @@ export default {
 }
 
 .forgot-password {
-  color: var(--color-primary);
+  color: #60a5fa;
   text-decoration: none;
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .forgot-password:hover {
@@ -1079,8 +1183,14 @@ export default {
 }
 
 .auth-btn.primary {
-  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  background: rgba(255, 255, 255, 0.2);
   color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .auth-btn.secondary {
@@ -1122,21 +1232,24 @@ export default {
 }
 
 .auth-switch p {
-  color: var(--text-secondary);
+  color: #ffffff;
+  font-weight: 500;
   margin: 0 0 1rem 0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 .switch-btn {
   background: none;
   border: none;
-  color: var(--color-primary);
+  color: #60a5fa;
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .switch-btn:hover {
-  color: var(--color-secondary);
+  color: #93c5fd;
 }
 
 /* 카테고리 그리드 */
@@ -1227,6 +1340,16 @@ export default {
   .auth-container {
     grid-template-columns: 1fr;
     gap: 2rem;
+  }
+  
+  .back-button-container {
+    top: 1rem;
+    left: 1rem;
+  }
+  
+  .back-button {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
   }
   
   .auth-form-container {

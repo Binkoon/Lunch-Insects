@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="home-container">
     <!-- 헤더 -->
     <header class="app-header">
@@ -9,19 +9,19 @@
         </div>
         
         <div class="header-right">
-          <!-- 개인 지출 정보 -->
+          <!-- 이번달 누적 지출 정보 -->
           <div class="expense-info">
             <div class="expense-item">
               <div class="expense-icon">🎫</div>
               <div class="expense-details">
-                <span class="expense-label">식권포인트</span>
+                <span class="expense-label">이번달 식권포인트</span>
                 <span class="expense-amount">{{ userExpenses.ticketPoints.toLocaleString() }}P</span>
               </div>
             </div>
             <div class="expense-item">
               <div class="expense-icon">💵</div>
               <div class="expense-details">
-                <span class="expense-label">현금</span>
+                <span class="expense-label">이번달 현금</span>
                 <span class="expense-amount">{{ userExpenses.cash.toLocaleString() }}원</span>
               </div>
             </div>
@@ -39,6 +39,11 @@
           <button class="group-btn" @click="openGroupManagement">
             <i class="icon-users">👥</i>
             그룹 관리
+          </button>
+          
+          <button class="logout-btn" @click="handleLogout">
+            <i class="icon-logout">🚪</i>
+            로그아웃
           </button>
         </div>
       </div>
@@ -88,19 +93,19 @@
               </button>
             </div>
             
-            <!-- 거리별 통계 -->
+            <!-- 플랫폼 통계 -->
             <div class="distance-stats">
               <div class="stat-item">
-                <span class="stat-icon">🚶</span>
-                <span class="stat-text">도보 5분: {{ nearbyStats.walking5min }}개</span>
+                <span class="stat-icon">👥</span>
+                <span class="stat-text">등록 사용자: {{ nearbyStats.activeUsers }}명</span>
               </div>
               <div class="stat-item">
-                <span class="stat-icon">🚶</span>
-                <span class="stat-text">도보 10분: {{ nearbyStats.walking10min }}개</span>
+                <span class="stat-icon">🍽️</span>
+                <span class="stat-text">등록된 음식점: {{ nearbyStats.restaurants }}개</span>
               </div>
               <div class="stat-item">
-                <span class="stat-icon">🚗</span>
-                <span class="stat-text">차량 5분: {{ nearbyStats.driving5min }}개</span>
+                <span class="stat-icon">🏢</span>
+                <span class="stat-text">활성 그룹: {{ nearbyStats.groups }}개</span>
               </div>
             </div>
           </div>
@@ -144,9 +149,9 @@
               </div>
               <div class="restaurant-info">
                 <h4 class="restaurant-name">{{ restaurant.name }}</h4>
-                <p class="restaurant-category">{{ restaurant.category }}</p>
+                <p class="restaurant-category">{{ getCategoryName(restaurant.category) }}</p>
                 <div class="restaurant-details">
-                  <span class="distance">🚶 {{ restaurant.distance }}분</span>
+                  <span class="distance">🚶 {{ restaurant.walkingTime }}분</span>
                   <span class="rating">⭐ {{ restaurant.rating }}</span>
                   <span class="price">{{ restaurant.priceRange }}</span>
                 </div>
@@ -319,14 +324,17 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import { Chart, registerables } from 'chart.js';
-import GroupCalendar from '@/components/Features/GroupCalendar.vue';
-import GroupManagement from '@/components/Features/GroupManagement.vue';
+// 코드 스플리팅을 위한 동적 import
+const GroupCalendar = () => import('@/components/Features/GroupCalendar.vue');
+const GroupManagement = () => import('@/components/Features/GroupManagement.vue');
+import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups } from '@/services/firebaseDBv2.js';
+import { getCurrentUser, logout } from '@/services/firebaseAuth.js';
+import { DEFAULT_LOCATION, DEFAULT_USER, DEFAULT_GROUP } from '@/config/constants.js';
 
 // Chart.js 등록
 Chart.register(...registerables);
 
 export default {
-  name: 'HomeNew',
   components: {
     GroupCalendar,
     GroupManagement
@@ -335,10 +343,20 @@ export default {
     // 상태 관리
     const loading = ref(false);
     const currentUser = ref({
-      id: 'user1',
-      name: '홍길동',
-      email: 'hong@example.com',
-      avatar: null
+      id: '',
+      name: '',
+      email: '',
+      avatar: null,
+      expenses: {
+        ticketPoints: 0,
+        cash: 0
+      },
+      location: {
+        name: '',
+        address: '',
+        lat: null,
+        lng: null
+      }
     });
     
     const currentGroup = ref({
@@ -352,300 +370,187 @@ export default {
       ]
     });
     
-    // 개인 지출 데이터
-    const userExpenses = ref({
-      ticketPoints: 15000,
-      cash: 25000
+    // 개인 지출 데이터 (사용자 데이터에서 가져옴)
+    const userExpenses = computed(() => currentUser.value.expenses || {
+      ticketPoints: 0,
+      cash: 0
     });
     
-    // 현재 위치 정보
-    const currentLocation = ref({
+    // 현재 위치 정보 (사용자 데이터에서 가져옴)
+    const currentLocation = computed(() => currentUser.value.location || {
       name: '한진빌딩',
       address: '서울특별시 중구 남대문로 63',
       lat: 37.5665,
       lng: 126.9780
     });
     
-    // 거리별 통계 (실제 음식점 데이터 기반)
-    const nearbyStats = computed(() => {
-      const walking5min = restaurants.value.filter(r => r.distance <= 5).length;
-      const walking10min = restaurants.value.filter(r => r.distance <= 10).length;
-      const driving5min = restaurants.value.filter(r => r.distance <= 5).length; // 차량 5분은 도보 5분과 동일
-      
-      return {
-        walking5min,
-        walking10min,
-        driving5min
-      };
+    // 플랫폼 통계 (Firebase 데이터 기반)
+    const nearbyStats = ref({
+      activeUsers: 0,
+      totalUsers: 0,
+      restaurants: 0,
+      groups: 0
     });
     
-    // 음식점 관련
-    const restaurants = ref([
-      {
-        id: 1,
-        name: '금성관',
-        category: '한식',
-        distance: 3,
-        rating: 4.2,
-        priceRange: '8,000원',
-        image: '/api/placeholder/80/80',
-        menu: [
-          { id: 1, name: '김치찌개', description: '얼큰한 김치찌개', price: 8000 },
-          { id: 2, name: '된장찌개', description: '구수한 된장찌개', price: 7000 },
-          { id: 3, name: '제육볶음', description: '달콤짭짤한 제육볶음', price: 12000 },
-          { id: 4, name: '불고기', description: '양념 불고기', price: 15000 }
-        ]
-      },
-      {
-        id: 2,
-        name: '리원',
-        category: '중식',
-        distance: 5,
-        rating: 4.1,
-        priceRange: '7,000원',
-        image: '/api/placeholder/80/80',
-        menu: [
-          { id: 1, name: '짜장면', description: '진한 춘장 소스', price: 7000 },
-          { id: 2, name: '짬뽕', description: '해물이 가득한 짬뽕', price: 8000 },
-          { id: 3, name: '탕수육', description: '바삭한 탕수육', price: 15000 },
-          { id: 4, name: '볶음밥', description: '새콤달콤한 볶음밥', price: 6000 }
-        ]
-      },
-      {
-        id: 28,
-        name: '일품향',
-        category: '중식',
-        distance: 6,
-        rating: 4.0,
-        priceRange: '8,500원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 3,
-        name: '신의주부대찌개',
-        category: '한식',
-        distance: 4,
-        rating: 4.3,
-        priceRange: '9,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 4,
-        name: '바스버거',
-        category: '패스트푸드',
-        distance: 2,
-        rating: 4.0,
-        priceRange: '6,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 5,
-        name: '맘스터치',
-        category: '패스트푸드',
-        distance: 3,
-        rating: 3.9,
-        priceRange: '5,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 6,
-        name: '롯데리아',
-        category: '패스트푸드',
-        distance: 4,
-        rating: 3.8,
-        priceRange: '5,500원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 7,
-        name: '태진옥',
-        category: '한식',
-        distance: 6,
-        rating: 4.4,
-        priceRange: '8,500원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 8,
-        name: '돈우가',
-        category: '일식',
-        distance: 7,
-        rating: 4.2,
-        priceRange: '12,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 9,
-        name: '이가네양꼬치',
-        category: '중식',
-        distance: 8,
-        rating: 4.1,
-        priceRange: '15,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 10,
-        name: '분지로',
-        category: '일식',
-        distance: 5,
-        rating: 4.3,
-        priceRange: '11,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 11,
-        name: '밀피유',
-        category: '양식',
-        distance: 9,
-        rating: 4.5,
-        priceRange: '18,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 12,
-        name: '은앤정닭갈비',
-        category: '한식',
-        distance: 6,
-        rating: 4.2,
-        priceRange: '13,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 13,
-        name: '보노보스햄버거',
-        category: '패스트푸드',
-        distance: 4,
-        rating: 4.0,
-        priceRange: '7,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 14,
-        name: '미쓰족발',
-        category: '한식',
-        distance: 8,
-        rating: 4.3,
-        priceRange: '25,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 15,
-        name: '대한곱창',
-        category: '한식',
-        distance: 7,
-        rating: 4.1,
-        priceRange: '20,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 16,
-        name: '월가갈비',
-        category: '한식',
-        distance: 10,
-        rating: 4.4,
-        priceRange: '30,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 17,
-        name: '창고43',
-        category: '양식',
-        distance: 12,
-        rating: 4.2,
-        priceRange: '22,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 18,
-        name: 'KFC',
-        category: '패스트푸드',
-        distance: 3,
-        rating: 3.9,
-        priceRange: '6,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 19,
-        name: '26층 구내식당',
-        category: '한식',
-        distance: 1,
-        rating: 3.8,
-        priceRange: '4,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 20,
-        name: '정신라멘',
-        category: '일식',
-        distance: 6,
-        rating: 4.3,
-        priceRange: '9,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 21,
-        name: '멘무샤',
-        category: '일식',
-        distance: 8,
-        rating: 4.1,
-        priceRange: '10,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 22,
-        name: '콜리그',
-        category: '양식',
-        distance: 7,
-        rating: 4.0,
-        priceRange: '16,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 23,
-        name: '행복한소바',
-        category: '일식',
-        distance: 5,
-        rating: 4.2,
-        priceRange: '8,500원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 24,
-        name: '청진동해장국',
-        category: '한식',
-        distance: 9,
-        rating: 4.3,
-        priceRange: '7,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 25,
-        name: '박씨화로구이',
-        category: '한식',
-        distance: 11,
-        rating: 4.4,
-        priceRange: '28,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 26,
-        name: '우대포블랙',
-        category: '양식',
-        distance: 13,
-        rating: 4.5,
-        priceRange: '35,000원',
-        image: '/api/placeholder/80/80'
-      },
-      {
-        id: 27,
-        name: '풍닭',
-        category: '한식',
-        distance: 6,
-        rating: 4.1,
-        priceRange: '12,000원',
-        image: '/api/placeholder/80/80'
+    // 음식점 관련 - Firebase에서 가져오기
+    const restaurants = ref([]);
+    
+    // 음식점 데이터 로드
+    const loadRestaurants = async () => {
+      try {
+        loading.value = true;
+        console.log('음식점 데이터 로드 시작...');
+        
+        // 간단한 방법으로 모든 음식점 가져오기
+        const restaurantData = await getAllRestaurants(50);
+        restaurants.value = restaurantData;
+        console.log('음식점 데이터 로드 완료:', restaurantData.length, '개');
+        
+        // 데이터 확인을 위한 로그
+        if (restaurantData.length > 0) {
+          console.log('첫 번째 음식점:', restaurantData[0]);
+        }
+      } catch (error) {
+        console.error('음식점 데이터 로드 실패:', error);
+        restaurants.value = [];
+      } finally {
+        loading.value = false;
       }
-    ]);
+    };
+
+    // 사용자 데이터 로드
+    const loadUserData = async () => {
+      try {
+        const authUser = getCurrentUser();
+        console.log('현재 사용자:', authUser);
+        
+        if (authUser) {
+          // Firestore에서 사용자 정보 가져오기 (UID로 직접 검색)
+          const userData = await getUser(authUser.uid);
+          console.log('Firestore 사용자 데이터:', userData);
+          
+          if (userData) {
+            currentUser.value = {
+              id: userData.id,
+              name: userData.name || '사용자',
+              email: userData.email,
+              avatar: userData.avatar,
+              expenses: userData.expenses || {
+                ticketPoints: 0,
+                cash: 0
+              },
+              location: userData.location || {
+                name: '한진빌딩',
+                address: '서울특별시 중구 남대문로 63',
+                lat: 37.5665,
+                lng: 126.9780
+              }
+            };
+          } else {
+                  // Firestore에 사용자 데이터가 없는 경우 기본값 사용
+                  currentUser.value = {
+                    ...DEFAULT_USER,
+                    id: authUser.uid,
+                    name: authUser.displayName || DEFAULT_USER.name,
+                    email: authUser.email,
+                    avatar: authUser.photoURL
+                  };
+          }
+          console.log('사용자 데이터 로드 완료:', currentUser.value.name);
+          
+          // 이번달 지출액 로드
+          await loadMonthlyExpenses();
+        } else {
+          console.log('로그인되지 않은 상태입니다.');
+          // 로그인하지 않은 상태에서도 기본 사용자 정보 설정
+          currentUser.value = DEFAULT_USER;
+        }
+      } catch (error) {
+        console.error('사용자 데이터 로드 실패:', error);
+      }
+    };
+
+    // 이번달 지출액 로드 (현재는 0으로 설정)
+    const loadMonthlyExpenses = async () => {
+      try {
+        if (currentUser.value.id && currentUser.value.id !== 'guest') {
+          console.log('이번달 지출액 로드 시작...');
+          
+          // 현재는 0으로 설정
+          currentUser.value.expenses = {
+            ticketPoints: 0,
+            cash: 0,
+            total: 0
+          };
+          
+          console.log('이번달 지출액 로드 완료:', currentUser.value.expenses);
+        }
+      } catch (error) {
+        console.error('이번달 지출액 로드 실패:', error);
+      }
+    };
+
+    // 통계 데이터 로드
+    const loadStatsData = async () => {
+      try {
+        console.log('통계 데이터 로드 시작...');
+        
+        // 전체 사용자 수 로드
+        const users = await getAllUsers();
+        
+        // 음식점 수 로드
+        const restaurants = await getRestaurantsCount(1000); // 충분히 큰 수로 제한
+        
+        // 통계 데이터 업데이트
+        nearbyStats.value.activeUsers = users.length; // 전체 등록자 수
+        nearbyStats.value.totalUsers = users.length;
+        nearbyStats.value.restaurants = restaurants.length;
+        nearbyStats.value.groups = 1; // 현재 DT 4인방 그룹만 있음
+        
+        console.log('통계 데이터 로드 완료:', nearbyStats.value);
+      } catch (error) {
+        console.error('통계 데이터 로드 실패:', error);
+        // 오류 시 기본값 설정
+        nearbyStats.value.activeUsers = 0;
+        nearbyStats.value.totalUsers = 0;
+        nearbyStats.value.restaurants = 0;
+        nearbyStats.value.groups = 0;
+      }
+    };
+
+    // 그룹 데이터 로드
+    const loadGroupData = async () => {
+      try {
+        console.log('그룹 데이터 로드 시작...');
+        
+        // 사용자의 그룹 목록에서 첫 번째 그룹 가져오기
+        const userGroups = await getUserGroups(currentUser.value.id);
+        
+        if (userGroups && userGroups.length > 0) {
+          const group = userGroups[0]; // 첫 번째 그룹 사용
+          currentGroup.value = group;
+          console.log('그룹 데이터 로드 완료:', group.name, '멤버 수:', group.members?.length || 0);
+        } else {
+          console.log('사용자가 속한 그룹이 없습니다.');
+          currentGroup.value = null;
+        }
+      } catch (error) {
+        console.error('그룹 데이터 로드 실패:', error);
+        currentGroup.value = null;
+      }
+    };
+
+    // 로그아웃 핸들러
+    const handleLogout = async () => {
+      try {
+        await logout();
+        console.log('로그아웃 완료');
+        // /auth 페이지로 리다이렉트
+        window.location.href = '/auth';
+      } catch (error) {
+        console.error('로그아웃 실패:', error);
+      }
+    };
     
     const selectedRestaurant = ref(null);
     const searchQuery = ref('');
@@ -667,6 +572,18 @@ export default {
       { id: 'chinese', name: '중식', icon: '🥢' },
       { id: 'fastfood', name: '패스트푸드', icon: '🍔' }
     ]);
+
+    // 카테고리 한글 변환 함수
+    const getCategoryName = (category) => {
+      const categoryMap = {
+        'korean': '한식',
+        'japanese': '일식',
+        'western': '양식',
+        'chinese': '중식',
+        'fastfood': '패스트푸드'
+      };
+      return categoryMap[category] || category;
+    };
     
     // 모달 상태
     const showAddEventModal = ref(false);
@@ -695,17 +612,7 @@ export default {
       
       // 카테고리 필터
       if (selectedCategory.value !== 'all') {
-        const categoryMap = {
-          'korean': '한식',
-          'japanese': '일식',
-          'western': '양식',
-          'chinese': '중식',
-          'fastfood': '패스트푸드'
-        };
-        const categoryName = categoryMap[selectedCategory.value];
-        if (categoryName) {
-          filtered = filtered.filter(restaurant => restaurant.category === categoryName);
-        }
+        filtered = filtered.filter(restaurant => restaurant.category === selectedCategory.value);
       }
       
       return filtered;
@@ -743,8 +650,9 @@ export default {
       currentGroup.value = group;
     };
     
-    const refreshRecommendations = () => {
+    const refreshRecommendations = async () => {
       console.log('음식점 새로고침');
+      await loadRestaurants();
     };
     
     const updateLocation = () => {
@@ -972,8 +880,12 @@ export default {
       }
     };
     
-    // 컴포넌트 마운트 시 그래프 초기화
-    onMounted(() => {
+    // 컴포넌트 마운트 시 데이터 로드 및 그래프 초기화
+    onMounted(async () => {
+      await loadUserData();
+      await loadGroupData();
+      await loadRestaurants();
+      await loadStatsData();
       setTimeout(() => {
         drawChart();
       }, 100);
@@ -1018,7 +930,14 @@ export default {
       handleDateSelected,
       selectChartType,
       refreshChart,
-      drawChart
+      drawChart,
+      loadRestaurants,
+      loadUserData,
+      loadGroupData,
+      loadMonthlyExpenses,
+      loadStatsData,
+      handleLogout,
+      getCategoryName
     };
   }
 };
@@ -1152,6 +1071,28 @@ export default {
   background: rgba(255, 255, 255, 0.35);
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.logout-btn {
+  background: rgba(239, 68, 68, 0.8);
+  color: white;
+  border: 2px solid rgba(239, 68, 68, 0.9);
+  border-radius: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  backdrop-filter: blur(10px);
+}
+
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
 }
 
 /* 메인 컨텐츠 */

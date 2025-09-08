@@ -10,11 +10,11 @@
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore",
     "format": "prettier --write src/",
-    "dev:create-user": "node scripts/create-dev-user.js",
-    "dev:test-firebase": "node scripts/test-firebase.js"
+    "db:setup": "node scripts/setup-firestore.js",
+    "db:update-real": "node scripts/update-real-data.js",
+    "auth:create-accounts": "node scripts/create-user-accounts.js"
   },
   "dependencies": {
-    "@vueuse/motion": "^3.0.3",
     "chart.js": "^4.5.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

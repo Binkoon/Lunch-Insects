@@ -18,10 +18,6 @@
       <!-- 메인 콘텐츠 -->
       <div class="hero-content">
         <div class="hero-container">
-          <!-- 시그니처 섹션 (가장 먼저 표시) -->
-          <div class="signature-section" :class="{ 'animate': signatureAnimated }" v-if="signatureVisible">
-            <Signature />
-          </div>
 
           <!-- 로고 섹션 -->
           <div class="logo-section" :class="{ 'animate': logoAnimated }">
@@ -76,16 +72,16 @@
           <!-- 통계 카드들 -->
           <div class="stats-section" :class="{ 'animate': statsAnimated }">
             <div class="stat-card">
-              <div class="stat-number">500+</div>
-              <div class="stat-label">활성 사용자</div>
+              <div class="stat-number">{{ platformStats.activeUsers }}+</div>
+              <div class="stat-label">등록 사용자</div>
             </div>
             <div class="stat-card">
-              <div class="stat-number">1,200+</div>
+              <div class="stat-number">{{ platformStats.restaurants }}+</div>
               <div class="stat-label">등록된 음식점</div>
             </div>
             <div class="stat-card">
-              <div class="stat-number">98%</div>
-              <div class="stat-label">만족도</div>
+              <div class="stat-number">{{ platformStats.groups }}+</div>
+              <div class="stat-label">활성 그룹</div>
             </div>
           </div>
         </div>
@@ -137,20 +133,16 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import Signature from '@/components/Common/Signature.vue';
+import { getAllUsers, getAllRestaurants } from '@/services/firebaseDBv2.js';
 
 export default {
   name: 'Intro',
-  components: {
-    Signature
-  },
+  components: {},
   setup() {
     const router = useRouter();
     const featuresSection = ref(null);
     
     // 애니메이션 상태
-    const signatureAnimated = ref(false);
-    const signatureVisible = ref(true);
     const logoAnimated = ref(false);
     const titleAnimated = ref(false);
     const titleLine1Animated = ref(false);
@@ -160,6 +152,13 @@ export default {
     const ctaAnimated = ref(false);
     const statsAnimated = ref(false);
     const scrollIndicatorAnimated = ref(false);
+
+    // 플랫폼 통계 데이터
+    const platformStats = ref({
+      activeUsers: 0,
+      restaurants: 0,
+      groups: 0
+    });
 
     // 기능 데이터
     const features = ref([
@@ -213,9 +212,31 @@ export default {
       };
     };
 
-    // 앱으로 이동 (인증 페이지로)
+    // 앱으로 이동 (인증 페이지로) - 섹션별 사라짐 애니메이션
     const goToApp = () => {
-      router.push('/auth');
+      const sections = [
+        '.logo-section', 
+        '.title-section',
+        '.cta-section',
+        '.stats-section'
+      ];
+      
+      // 각 섹션을 순차적으로 사라지게 하기
+      sections.forEach((selector, index) => {
+        const element = document.querySelector(selector);
+        if (element) {
+          setTimeout(() => {
+            element.style.transition = 'transform 0.4s ease-in-out, opacity 0.4s ease-in-out';
+            element.style.transform = 'translateY(-20px) scale(0.95)';
+            element.style.opacity = '0';
+          }, index * 100); // 100ms 간격으로 순차 실행
+        }
+      });
+      
+      // 모든 섹션이 사라진 후 페이지 이동
+      setTimeout(() => {
+        router.push('/auth');
+      }, sections.length * 100 + 400);
     };
 
     // 기능 섹션으로 스크롤
@@ -229,38 +250,51 @@ export default {
 
     // 애니메이션 시퀀스 실행
     const startAnimationSequence = () => {
-      // 시그니처가 가장 먼저 나타남
-      setTimeout(() => signatureAnimated.value = true, 200);
-      
-      // 시그니처가 완전히 나타난 후 잠시 대기
-      setTimeout(() => {
-        // 시그니처가 사라지기 시작
-        signatureAnimated.value = false;
-        setTimeout(() => {
-          signatureVisible.value = false;
-        }, 800); // 사라지는 애니메이션 시간
-      }, 3000); // 시그니처가 3초간 표시된 후 사라짐
-      
-      // 시그니처가 사라진 후 나머지 콘텐츠 시작
-      setTimeout(() => logoAnimated.value = true, 4000);
-      setTimeout(() => titleAnimated.value = true, 4500);
-      setTimeout(() => titleLine1Animated.value = true, 4700);
-      setTimeout(() => titleLine2Animated.value = true, 4900);
-      setTimeout(() => decorationAnimated.value = true, 5100);
-      setTimeout(() => subtitleAnimated.value = true, 5300);
-      setTimeout(() => ctaAnimated.value = true, 5500);
-      setTimeout(() => statsAnimated.value = true, 5700);
-      setTimeout(() => scrollIndicatorAnimated.value = true, 5900);
+      // 로고 애니메이션 시작
+      setTimeout(() => logoAnimated.value = true, 200);
+      setTimeout(() => titleAnimated.value = true, 500);
+      setTimeout(() => titleLine1Animated.value = true, 700);
+      setTimeout(() => titleLine2Animated.value = true, 900);
+      setTimeout(() => decorationAnimated.value = true, 1100);
+      setTimeout(() => subtitleAnimated.value = true, 1300);
+      setTimeout(() => ctaAnimated.value = true, 1500);
+      setTimeout(() => statsAnimated.value = true, 1700);
+      setTimeout(() => scrollIndicatorAnimated.value = true, 1900);
+    };
+
+    // Firebase에서 통계 데이터 로드
+    const loadPlatformStats = async () => {
+      try {
+        console.log('플랫폼 통계 로드 시작...');
+        
+        // 전체 사용자 수 로드
+        const users = await getAllUsers();
+        
+        // 음식점 수 로드
+        const restaurants = await getAllRestaurants(1000); // 충분히 큰 수로 제한
+        
+        // 통계 데이터 업데이트
+        platformStats.value.activeUsers = users.length; // 전체 등록자 수
+        platformStats.value.restaurants = restaurants.length;
+        platformStats.value.groups = 1; // 현재 활성 그룹 수
+        
+        console.log('플랫폼 통계 로드 완료:', platformStats.value);
+      } catch (error) {
+        console.error('플랫폼 통계 로드 실패:', error);
+        // 오류 시 기본값 설정
+        platformStats.value.activeUsers = 0;
+        platformStats.value.restaurants = 0;
+        platformStats.value.groups = 0;
+      }
     };
 
     onMounted(() => {
       startAnimationSequence();
+      loadPlatformStats();
     });
 
     return {
       featuresSection,
-      signatureAnimated,
-      signatureVisible,
       logoAnimated,
       titleAnimated,
       titleLine1Animated,
@@ -271,6 +305,7 @@ export default {
       statsAnimated,
       scrollIndicatorAnimated,
       features,
+      platformStats,
       getRandomShapeStyle,
       goToApp,
       scrollToFeatures
@@ -367,25 +402,6 @@ export default {
   margin: 0 auto;
 }
 
-/* 시그니처 섹션 */
-.signature-section {
-  margin-bottom: 2rem;
-  opacity: 0;
-  transform: translateY(30px) scale(0.9);
-  transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.signature-section.animate {
-  opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-/* 시그니처 사라지는 애니메이션 */
-.signature-section:not(.animate) {
-  opacity: 0;
-  transform: translateY(-30px) scale(0.9);
-  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-}
 
 /* 로고 섹션 */
 .logo-section {

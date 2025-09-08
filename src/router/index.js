@@ -1,13 +1,18 @@
 import { createRouter, createWebHistory } from "vue-router";
-import Intro from "../pages/Intro.vue";
-import Auth from "../pages/Auth.vue";
-import Onboarding from "../pages/Onboarding.vue";
-import HomeNew from "../pages/HomeNew.vue";
-import About from "../pages/About.vue";
+
+// 코드 스플리팅을 위한 동적 import
+const Intro = () => import("../pages/Intro.vue");
+const Auth = () => import("../pages/Auth.vue");
+const HomeNew = () => import("../pages/HomeNew.vue");
+const About = () => import("../pages/About.vue");
 
 const routes = [
   {
     path: "/",
+    redirect: "/intro"
+  },
+  {
+    path: "/intro",
     name: "Intro",
     component: Intro,
   },
@@ -15,11 +20,6 @@ const routes = [
     path: "/auth",
     name: "Auth",
     component: Auth,
-  },
-  {
-    path: "/onboarding",
-    name: "Onboarding",
-    component: Onboarding,
   },
   {
     path: "/home",

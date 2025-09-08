@@ -81,3 +81,7 @@ node_modules/
 
 # 환경별 설정
 *.local
+
+# Firebase 보안 규칙 (민감한 정보 포함)
+firestore.rules
+firestore-dev.rules
