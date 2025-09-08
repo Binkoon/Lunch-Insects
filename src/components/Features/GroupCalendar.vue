@@ -27,7 +27,7 @@
       <div class="member-legend">
         <div class="legend-title">팀원 상태</div>
         <div class="legend-items">
-          <div class="legend-item" v-for="member in members" :key="member.id">
+          <div class="legend-item" v-for="member in actualMembers" :key="member.id">
             <div 
               class="member-dot" 
               :style="{ backgroundColor: member.color }"
@@ -63,33 +63,43 @@
             'holiday': day.isHoliday,
             'disabled': day.isWeekendOrHoliday
           }"
-          @click="!day.isWeekendOrHoliday && selectDay(day)"
+          @click="handleDayClick(day)"
         >
           <div class="day-header">
             <span class="day-number">{{ day.dayNumber }}</span>
             <div v-if="day.isToday" class="today-indicator"></div>
+            <!-- 제안 알림 뱃지 -->
+            <div v-if="getProposalsForDay(day.date).length > 0" class="proposal-badge">
+              {{ getProposalsForDay(day.date).length }}
+            </div>
           </div>
           
-          <!-- 평일인 경우에만 멤버 표시 -->
+          <!-- 평일인 경우에만 제안/확정 메뉴 표시 -->
           <div v-if="!day.isWeekendOrHoliday" class="day-content">
-            <!-- 멤버 상태들 -->
-            <div class="member-statuses">
+            <!-- 확정된 메뉴 표시 -->
+            <div v-if="getConfirmedMealForDay(day.date)" class="confirmed-meal">
+              <div class="meal-icon">🍽️</div>
+              <div class="meal-name">{{ getConfirmedMealForDay(day.date) }}</div>
+            </div>
+            
+            <!-- 제안 중인 메뉴들 (확정되지 않은 경우만) -->
+            <div v-else-if="getProposalsForDay(day.date).length > 0" class="proposal-meals">
               <div 
-                v-for="member in members" 
-                :key="member.id"
-                class="member-status"
-                :class="getMemberStatusClass(day, member.id)"
-                :title="`${member.name}: ${getMemberStatusText(day, member.id)}`"
+                v-for="proposal in getProposalsForDay(day.date).slice(0, 2)" 
+                :key="proposal.id"
+                class="proposal-meal"
+                :class="getProposalStatus(proposal)"
               >
-                <div 
-                  class="status-indicator" 
-                  :style="{ backgroundColor: member.color }"
-                ></div>
+                <span class="meal-icon">{{ getProposalIcon(proposal) }}</span>
+                <span class="meal-name">{{ proposal.restaurant.name }}</span>
+              </div>
+              <div v-if="getProposalsForDay(day.date).length > 2" class="more-proposals">
+                +{{ getProposalsForDay(day.date).length - 2 }}
               </div>
             </div>
             
-            <!-- 제안들 -->
-            <div v-if="getProposalsForDay(day.date).length > 0" class="proposals">
+            <!-- 기존 제안 리스트 (숨김 처리) -->
+            <div v-if="false" class="proposals">
               <div 
                 v-for="proposal in getProposalsForDay(day.date)" 
                 :key="proposal.id"
@@ -106,7 +116,11 @@
                 <div class="proposal-info">
                   <span class="proposer-name">{{ proposal.proposer.name }}</span>
                   <span class="restaurant-name">{{ proposal.restaurant.name }}</span>
-                  <span class="proposal-status">{{ getProposalStatus(proposal) === 'pending' ? '제안 중' : getProposalStatus(proposal) === 'accepted' ? '확정' : '거부' }}</span>
+                  <span class="proposal-status">{{ 
+                    getProposalStatus(proposal) === 'pending' ? '제안 중' : 
+                    getProposalStatus(proposal) === 'confirmed' ? '🎉 확정' : 
+                    '❌ 거부' 
+                  }}</span>
                 </div>
                 <div class="drag-handle">⋮⋮</div>
               </div>
@@ -142,8 +156,8 @@
       </div>
     </div>
 
-    <!-- 선택된 날짜 상세 정보 -->
-    <div v-if="selectedDay" class="day-details-panel">
+    <!-- 선택된 날짜 상세 정보 (패널 비활성화, 모달로 대체) -->
+    <div v-if="false && selectedDay" class="day-details-panel">
       <div class="panel-header">
         <div class="selected-date">
           <h3>{{ formatSelectedDate(selectedDay.date) }}</h3>
@@ -179,7 +193,7 @@
             <h4>팀원 상태</h4>
             <div class="members-list">
               <div 
-                v-for="member in members" 
+                v-for="member in actualMembers" 
                 :key="member.id"
                 class="member-item"
                 :class="getMemberStatusClass(selectedDay, member.id)"
@@ -239,95 +253,6 @@
       </div>
     </div>
 
-    <!-- 멤버 상태 편집 모달 -->
-    <div v-if="showStatusModal" class="modal-overlay" @click="closeStatusModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ editingMember.name }} - {{ editingDate }} 상태 편집</h3>
-          <button @click="closeStatusModal" class="close-btn">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="status-options">
-            <label 
-              v-for="status in statusOptions" 
-              :key="status.value"
-              class="status-option"
-            >
-              <input 
-                type="radio" 
-                :value="status.value" 
-                v-model="editingStatus"
-              />
-              <span class="status-icon">{{ status.icon }}</span>
-              <span class="status-label">{{ status.label }}</span>
-            </label>
-          </div>
-          
-          <!-- 식사 정보 (식사 선택 시) -->
-          <div v-if="editingStatus === 'meal'" class="meal-details">
-            <div class="form-group">
-              <label>음식점 이름</label>
-              <input 
-                v-model="mealDetails.restaurant"
-                placeholder="음식점 이름을 입력하세요"
-              />
-            </div>
-            <div class="form-group">
-              <label>메뉴</label>
-              <input 
-                v-model="mealDetails.menu"
-                placeholder="먹은 메뉴를 입력하세요"
-              />
-            </div>
-            <div class="form-group">
-              <label>참여 멤버</label>
-              <div class="participants">
-                <label 
-                  v-for="member in members" 
-                  :key="member.id"
-                  class="participant-checkbox"
-                >
-                  <input 
-                    type="checkbox" 
-                    :value="member.id" 
-                    v-model="mealDetails.participants"
-                  />
-                  {{ member.name }}
-                </label>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 휴가 정보 (휴가 선택 시) -->
-          <div v-if="editingStatus === 'vacation'" class="vacation-details">
-            <div class="form-group">
-              <label>휴가 사유</label>
-              <input 
-                v-model="vacationDetails.reason"
-                placeholder="휴가 사유를 입력하세요"
-              />
-            </div>
-          </div>
-          
-          <!-- 다른 약속 정보 (다른 약속 선택 시) -->
-          <div v-if="editingStatus === 'other'" class="other-details">
-            <div class="form-group">
-              <label>약속 내용</label>
-              <input 
-                v-model="otherDetails.description"
-                placeholder="약속 내용을 입력하세요"
-              />
-            </div>
-          </div>
-        </div>
-        
-        <div class="modal-footer">
-          <button @click="closeStatusModal" class="btn-secondary">취소</button>
-          <button @click="saveStatus" class="btn-primary">저장</button>
-        </div>
-      </div>
-    </div>
     
     <!-- 제안 상세 모달 -->
     <div v-if="showProposalModal" class="modal-overlay" @click="closeProposalModal">
@@ -368,7 +293,7 @@
                       :key="userId"
                       class="member-badge"
                     >
-                      {{ members.find(m => m.id === userId)?.name || '알 수 없음' }}
+                      {{ actualMembers.find(m => m.id === userId)?.name || '알 수 없음' }}
                     </span>
                   </div>
                 </div>
@@ -381,26 +306,42 @@
                       :key="userId"
                       class="member-badge"
                     >
-                      {{ members.find(m => m.id === userId)?.name || '알 수 없음' }}
+                      {{ actualMembers.find(m => m.id === userId)?.name || '알 수 없음' }}
                     </span>
                   </div>
                 </div>
               </div>
             </div>
             
-            <!-- 투표 버튼 -->
-            <div class="voting-actions">
+            <!-- 투표 결과 또는 투표 버튼 -->
+            <div v-if="getProposalStatus(selectedProposal) === 'confirmed'" class="confirmation-banner">
+              <div class="confirmation-icon">🎉</div>
+              <div class="confirmation-text">
+                <h4>확정되었습니다!</h4>
+                <p>{{ selectedProposal.restaurant.name }}에서 점심을 먹어요.</p>
+              </div>
+            </div>
+            
+            <div v-else-if="getProposalStatus(selectedProposal) === 'rejected'" class="rejection-banner">
+              <div class="rejection-icon">❌</div>
+              <div class="rejection-text">
+                <h4>거부되었습니다</h4>
+                <p>다른 음식점을 제안해 보세요.</p>
+              </div>
+            </div>
+            
+            <div v-else class="voting-actions">
               <button 
                 class="vote-btn accept" 
                 @click="voteProposal(selectedProposal.id, 'accept')"
-                :disabled="selectedProposal.votes.accepted.includes(currentUser?.id)"
+                :disabled="selectedProposal.votes.accepted.includes(currentUser?.uid || currentUser?.id)"
               >
                 👍 수락
               </button>
               <button 
                 class="vote-btn reject" 
                 @click="voteProposal(selectedProposal.id, 'reject')"
-                :disabled="selectedProposal.votes.rejected.includes(currentUser?.id)"
+                :disabled="selectedProposal.votes.rejected.includes(currentUser?.uid || currentUser?.id)"
               >
                 👎 거부
               </button>
@@ -420,12 +361,16 @@ import {
   getMemberStatus, 
   getGroupMemberStatuses, 
   deleteMemberStatus,
-  getGroup
+  getGroup,
+  getUser,
+  getAllRestaurants,
+  addRestaurantVisit,
+  getRestaurantVisitCounts
 } from '@/services/firebaseDBv2.js';
 import { getCurrentUser } from '@/services/firebaseAuth.js';
-// import { mockDB, initializeMockDatabase } from '@/services/database-init.js'; // 삭제됨 - Firebase 사용
 
 export default {
+  components: { },
   props: {
     groupId: {
       type: String,
@@ -436,23 +381,82 @@ export default {
       default: () => []
     }
   },
-  emits: ['date-selected', 'group-loaded'],
+  emits: ['date-selected', 'group-loaded', 'open-status-modal', 'status-updated'],
   setup(props, { emit }) {
-    // 목업 데이터베이스 초기화
-    // initializeMockDatabase(); // 삭제됨 - Firebase 사용
     
-    // 현재 날짜 (2025년 9월로 설정)
-    const currentDate = ref(new Date(2025, 8, 1)); // 2025년 9월
+    // 현재 날짜
+    const currentDate = ref(new Date());
     const selectedDay = ref(null);
-    const showStatusModal = ref(false);
-    const editingMember = ref(null);
-    const editingDate = ref('');
-    const editingStatus = ref('');
+    
+    // 실제 멤버 정보를 저장할 ref
+    const actualMembers = ref([]);
     const currentUser = ref(null);
     const memberStatuses = ref({});
     const loading = ref(false);
     const proposals = ref([]);
     const showProposalModal = ref(false);
+
+    // 멤버 이름 로드 함수
+    const loadMemberNames = async () => {
+      try {
+        if (!props.members || props.members.length === 0) {
+          actualMembers.value = [];
+          return;
+        }
+
+        const memberPromises = props.members.map(async (member) => {
+          // 이미 객체 형태이고 이름이 있는 경우
+          if (typeof member === 'object') {
+            const memberId = member.id || member.uid || member.userId || member;
+            try {
+              const userData = await getUser(memberId);
+              return {
+                id: memberId,
+                name: userData?.name || member.name || `사용자 ${String(memberId).slice(-4)}`,
+                color: member.color || `#${Math.floor(Math.random()*16777215).toString(16)}`
+              };
+            } catch (error) {
+              return {
+                id: memberId,
+                name: member.name || `사용자 ${String(memberId).slice(-4)}`,
+                color: member.color || `#${Math.floor(Math.random()*16777215).toString(16)}`
+              };
+            }
+          }
+
+          // UID만 있는 경우 실제 사용자 정보 가져오기
+          const memberId = typeof member === 'string' ? member : member.id;
+          try {
+            const userData = await getUser(memberId);
+            return {
+              id: memberId,
+              name: userData?.name || `사용자 ${String(memberId).slice(-4)}`,
+              color: member.color || `#${Math.floor(Math.random()*16777215).toString(16)}`
+            };
+          } catch (error) {
+            console.error(`사용자 ${memberId} 정보 로드 실패:`, error);
+            return {
+              id: memberId,
+              name: `사용자 ${String(memberId).slice(-4)}`,
+              color: member.color || `#${Math.floor(Math.random()*16777215).toString(16)}`
+            };
+          }
+        });
+
+        actualMembers.value = await Promise.all(memberPromises);
+        console.log('캘린더 멤버 이름 로드 완료:', actualMembers.value);
+      } catch (error) {
+        console.error('멤버 이름 로드 실패:', error);
+        actualMembers.value = props.members || [];
+      }
+    };
+
+    // members 또는 groupId가 바뀌면 이름 재로딩
+    watch(
+      () => [props.groupId, JSON.stringify(props.members)],
+      () => loadMemberNames(),
+      { immediate: true }
+    );
     const selectedProposal = ref(null);
     
     // 드래그 앤 드롭 관련
@@ -464,11 +468,14 @@ export default {
     const isAnimating = ref(false);
     
     // 상태 옵션
+    // 상태 옵션: 미정 / 가능 / 불가능(사유)
     const statusOptions = [
+      { value: '', label: '미정', icon: '❔' },
       { value: 'available', label: '가능', icon: '✅' },
-      { value: 'meal', label: '식사', icon: '🍽️' },
-      { value: 'vacation', label: '휴가', icon: '🏖️' },
-      { value: 'other', label: '다른 약속', icon: '📅' }
+      { value: 'vacation', label: '휴가(불가능)', icon: '🏖️' },
+      { value: 'other', label: '다른 약속(불가능)', icon: '📅' },
+      { value: 'solo', label: '혼밥 예정(불가능)', icon: '🍱' },
+      { value: 'skip', label: '밥 스킵(불가능)', icon: '⏭️' }
     ];
     
     // 식사 정보
@@ -491,13 +498,37 @@ export default {
     // 요일 배열
     const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
     
-    // 음식점 목록
-    const restaurants = ref([
-      '금성관', '리원', '신의주부대찌개', '바스버거', '맘스터치', '롯데리아', '태진옥', '돈우가',
-      '이가네양꼬치', '분지로', '밀피유', '은앤정닭갈비', '보노보스햄버거', '미쓰족발', '대한곱창',
-      '월가갈비', '창고43', 'KFC', '26층 구내식당', '정신라멘', '멘무샤', '콜리그', '행복한소바',
-      '청진동해장국', '박씨화로구이', '우대포블랙', '풍닭'
-    ]);
+    // 음식점 목록 (Firebase에서 로드)
+    const restaurants = ref([]);
+    const dropdownOpen = ref(false);
+    const filteredRestaurants = computed(() => {
+      const q = (mealDetails.value.restaurant || '').toLowerCase();
+      if (!q) return restaurants.value;
+      return restaurants.value.filter(r => String(r).toLowerCase().includes(q));
+    });
+    const selectRestaurantOption = (r) => {
+      mealDetails.value.restaurant = r;
+      dropdownOpen.value = false;
+    };
+
+    const handleDropdownBlur = () => {
+      // 드롭다운 옵션 클릭 시간을 위한 지연
+      setTimeout(() => {
+        dropdownOpen.value = false;
+      }, 150);
+    };
+
+    // 음식점 목록 로드
+    const loadRestaurants = async () => {
+      try {
+        const restaurantList = await getAllRestaurants(200);
+        restaurants.value = restaurantList.map(r => r.name);
+        console.log('음식점 목록 로드 완료:', restaurants.value.length);
+      } catch (error) {
+        console.error('음식점 목록 로드 실패:', error);
+        restaurants.value = [];
+      }
+    };
     
     // 선택된 음식점
     const selectedRestaurant = ref('');
@@ -539,14 +570,11 @@ export default {
     
     // 가능한 멤버들 가져오기
     const getAvailableMembers = (date) => {
-      // 임시 데이터 - 실제로는 API에서 가져와야 함
-      const mockData = {
-        '2024-01-15': ['member1', 'member2', 'member3'],
-        '2024-01-16': ['member1', 'member2'],
-        '2024-01-17': ['member2', 'member3', 'member4']
-      };
-      
-      return mockData[date] || [];
+      // Firebase에서 로드한 멤버 상태 기반으로 가능 멤버 추출
+      const statuses = memberStatuses.value[date] || {};
+      return Object.entries(statuses)
+        .filter(([, s]) => s.status === 'available')
+        .map(([memberId]) => memberId);
     };
     
     // 현재 월 텍스트
@@ -673,29 +701,14 @@ export default {
     
     // 날짜별 이벤트 가져오기
     const getDayEvents = (date) => {
-      // 임시 데이터 - 실제로는 API에서 가져와야 함
-      const mockEvents = {
-        '2024-01-15': [
-          { id: 1, type: 'meal', title: '점심: 금성관', participants: ['member1', 'member2'], restaurant: '금성관' },
-          { id: 2, type: 'vacation', title: '휴가', participants: ['member3'] }
-        ],
-        '2024-01-16': [
-          { id: 3, type: 'meal', title: '점심: 바스버거', participants: ['member2', 'member3'], restaurant: '바스버거' }
-        ]
-      };
-      
-      return mockEvents[date] || [];
+      // TODO: Firebase 이벤트 연동 시 교체. 현재는 비어 있음
+      return [];
     };
     
     // 날짜별 메모 가져오기
     const getDayMemo = (date) => {
-      // 임시 데이터 - 실제로는 API에서 가져와야 함
-      const mockMemos = {
-        '2024-01-15': '오늘은 김치찌개를 먹었습니다. 맛있었어요!',
-        '2024-01-16': '치킨이 정말 맛있었습니다.'
-      };
-      
-      return mockMemos[date] || '';
+      // TODO: Firebase 메모 연동 시 교체. 현재는 비어 있음
+      return '';
     };
     
     // 이벤트 아이콘 가져오기
@@ -720,16 +733,34 @@ export default {
       currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1);
     };
     
+    // 날짜 클릭 핸들러
+    const handleDayClick = (day) => {
+      if (!day.isWeekendOrHoliday) {
+        selectDay(day);
+      }
+    };
+
     // 날짜 선택
     const selectDay = async (day) => {
       selectedDay.value = day;
       
-      // 날짜 선택 애니메이션
-      await nextTick();
-      const dayElement = document.querySelector(`[data-date="${day.date}"]`);
-      if (dayElement) {
-        animateDaySelection(dayElement);
-      }
+      // 현재 사용자 정보 준비
+      const currentMember = actualMembers.value.find(m => m.id === (currentUser.value?.uid || currentUser.value?.id))
+        || { id: currentUser.value?.uid || currentUser.value?.id, name: currentUser.value?.name || '나' };
+      
+      // 모달 데이터 준비
+      const modalData = {
+        member: currentMember,
+        date: day.date,
+        currentStatus: memberStatuses.value[day.date]?.[currentMember.id]?.status || '',
+        allMembers: actualMembers.value,
+        memberStatuses: memberStatuses.value,
+        restaurants: restaurants.value,
+        groupId: props.groupId
+      };
+      
+      // 부모 컴포넌트에 모달 오픈 이벤트 전달
+      emit('open-status-modal', modalData);
       
       // 부모 컴포넌트에 날짜 선택 이벤트 전달
       emit('date-selected', day.date);
@@ -742,7 +773,8 @@ export default {
     
     // 멤버 상태 편집
     const editMemberStatus = (memberId, date) => {
-      editingMember.value = props.members.find(m => m.id === memberId);
+      // actualMembers에서 안전하게 이름 매핑
+      editingMember.value = actualMembers.value.find(m => m.id === memberId) || { id: memberId, name: `사용자 ${String(memberId).slice(-4)}` };
       editingDate.value = date;
       editingStatus.value = getMemberStatusFromData({ date }, memberId);
       
@@ -790,12 +822,17 @@ export default {
         let details = {};
         
         // 상태별 상세 정보 수집
-        if (editingStatus.value === 'meal') {
+        if (editingStatus.value === 'available') {
           details = {
             restaurant: mealDetails.value.restaurant,
             menu: mealDetails.value.menu,
             participants: mealDetails.value.participants
           };
+          
+          // 음식점 제안이 있으면 제안 생성
+          if (mealDetails.value.restaurant) {
+            createProposal(editingDate.value, mealDetails.value.restaurant);
+          }
         } else if (editingStatus.value === 'vacation') {
           details = {
             reason: vacationDetails.value.reason
@@ -806,6 +843,14 @@ export default {
           };
         }
         
+        console.log('상태 저장 시도:', {
+          groupId: props.groupId,
+          userId: editingMember.value.id,
+          date: editingDate.value,
+          status: editingStatus.value,
+          details
+        });
+
         const success = await saveMemberStatusToFirebase(
           editingMember.value.id,
           editingDate.value,
@@ -814,9 +859,12 @@ export default {
         );
         
         if (success) {
-          console.log('상태 저장 성공');
+          console.log('✅ 상태 저장 성공');
+          // 로컬 상태 새로고침
+          await loadMemberStatuses();
           closeStatusModal();
         } else {
+          console.error('❌ 상태 저장 실패');
           alert('상태 저장에 실패했습니다.');
         }
       } catch (error) {
@@ -864,24 +912,72 @@ export default {
     };
     
     const getProposalStatus = (proposal) => {
-      const totalMembers = props.members.length;
+      const totalMembers = actualMembers.value.length;
       const acceptedCount = proposal.votes.accepted.length;
       const rejectedCount = proposal.votes.rejected.length;
       
       if (rejectedCount > 0) {
         return 'rejected';
-      } else if (acceptedCount === totalMembers) {
-        return 'accepted';
+      } else if (acceptedCount >= Math.ceil(totalMembers / 2)) { // 과반수 이상이면 확정
+        return 'confirmed';
       } else {
         return 'pending';
       }
     };
     
-    const voteProposal = (proposalId, vote) => {
+    // 제안 생성
+    const createProposal = (date, restaurantName) => {
+      const proposalId = `proposal_${date}_${Date.now()}`;
+      const newProposal = {
+        id: proposalId,
+        date: date,
+        restaurant: {
+          name: restaurantName,
+          category: '알 수 없음',
+          rating: 0,
+          distance: 0,
+          priceRange: '가격 정보 없음'
+        },
+        proposer: {
+          id: currentUser.value?.uid || currentUser.value?.id,
+          name: currentUser.value?.name || '알 수 없음'
+        },
+        votes: {
+          accepted: [currentUser.value?.uid || currentUser.value?.id], // 제안자는 자동으로 수락
+          rejected: []
+        },
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      };
+      
+      proposals.value.push(newProposal);
+      console.log('새 제안 생성:', newProposal);
+    };
+
+    // 확정된 메뉴 가져오기
+    const getConfirmedMealForDay = (date) => {
+      const confirmedProposal = proposals.value.find(p => 
+        p.date === date && getProposalStatus(p) === 'confirmed'
+      );
+      return confirmedProposal?.restaurant.name || null;
+    };
+
+    // 제안 아이콘 가져오기
+    const getProposalIcon = (proposal) => {
+      const status = getProposalStatus(proposal);
+      switch (status) {
+        case 'confirmed': return '✅';
+        case 'rejected': return '❌';
+        case 'pending': 
+        default: return '⏳';
+      }
+    };
+    
+    const voteProposal = async (proposalId, vote) => {
       const proposal = proposals.value.find(p => p.id === proposalId);
       if (!proposal) return;
       
-      const userId = currentUser.value.id;
+      const userId = currentUser.value?.uid || currentUser.value?.id;
       
       // 기존 투표 제거
       proposal.votes.accepted = proposal.votes.accepted.filter(id => id !== userId);
@@ -896,6 +992,24 @@ export default {
       
       // 상태 업데이트
       proposal.status = getProposalStatus(proposal);
+      
+      // 확정되었으면 알림 및 방문 기록 추가
+      if (proposal.status === 'confirmed') {
+        alert(`🎉 "${proposal.restaurant.name}" 확정되었습니다!`);
+        
+        // 방문 기록 추가
+        try {
+          await addRestaurantVisit(
+            props.groupId,
+            proposal.restaurant.name,
+            proposal.date,
+            proposal.votes.accepted
+          );
+          console.log('방문 기록 추가 완료');
+        } catch (error) {
+          console.error('방문 기록 추가 실패:', error);
+        }
+      }
       
       console.log('투표 완료:', proposal);
     };
@@ -1103,6 +1217,8 @@ export default {
       await loadCurrentUser();
       await loadGroupData();
       await loadMemberStatuses();
+      await loadMemberNames();
+      await loadRestaurants();
       
       // 제안 데이터는 Firebase에서 가져오도록 수정 (현재는 빈 배열로 초기화)
       proposals.value = [];
@@ -1111,15 +1227,21 @@ export default {
     
     // 가능한 멤버들만 필터링
     const getAvailableMembersForDay = (day) => {
-      return props.members.filter(member => 
+      return actualMembers.value.filter(member => 
         day.availableMembers.includes(member.id)
       );
     };
     
     // 음식점 선택 모달 열기
-    const openRestaurantModal = (day) => {
+    const openRestaurantModal = async (day) => {
       selectedDay.value = day;
       selectedRestaurant.value = '';
+      try {
+        // Firebase에서 음식점 최신 목록 로드 (최대 200개)
+        restaurants.value = (await getAllRestaurants(200)).map(r => r.name);
+      } catch (e) {
+        console.error('음식점 목록 로드 실패:', e);
+      }
     };
 
     // 현재 사용자 정보 가져오기
@@ -1134,7 +1256,10 @@ export default {
 
     // 멤버 상태들 로드
     const loadMemberStatuses = async () => {
-      if (!props.groupId) return;
+      if (!props.groupId) {
+        console.warn('groupId가 없어서 멤버 상태 로드 불가');
+        return;
+      }
       
       loading.value = true;
       try {
@@ -1145,9 +1270,16 @@ export default {
         const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
         const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
         
+        console.log('멤버 상태 로드 중:', { groupId: props.groupId, startDate, endDate });
+        
         const result = await getGroupMemberStatuses(props.groupId, startDate, endDate);
+        console.log('멤버 상태 로드 결과:', result);
+        
         if (result.success) {
           memberStatuses.value = result.data;
+          console.log('✅ 멤버 상태 로드 성공:', Object.keys(result.data).length + '개 날짜');
+        } else {
+          console.error('❌ 멤버 상태 로드 실패:', result.error);
         }
       } catch (error) {
         console.error('멤버 상태 로드 실패:', error);
@@ -1196,14 +1328,6 @@ export default {
     return {
       currentDate,
       selectedDay,
-      showStatusModal,
-      editingMember,
-      editingDate,
-      editingStatus,
-      statusOptions,
-      mealDetails,
-      vacationDetails,
-      otherDetails,
       weekdays,
       restaurants,
       selectedRestaurant,
@@ -1214,6 +1338,7 @@ export default {
       memberStatuses,
       loading,
       proposals,
+      actualMembers,
       showProposalModal,
       selectedProposal,
       currentMonthText,
@@ -1237,11 +1362,9 @@ export default {
       deleteMemberStatusFromFirebase,
       prevMonth,
       nextMonth,
+      handleDayClick,
       selectDay,
       closeDetails,
-      editMemberStatus,
-      closeStatusModal,
-      saveStatus,
       saveMemo,
       // 드래그 앤 드롭
       draggingProposal,
@@ -1256,7 +1379,11 @@ export default {
       animateDaySelection,
       animateProposalMove,
       animateStatusChange,
-      animatePanelSlide
+      animatePanelSlide,
+      // 제안 관리
+      createProposal,
+      getConfirmedMealForDay,
+      getProposalIcon
     };
   }
 };
@@ -1516,45 +1643,113 @@ export default {
   border-radius: 50%;
 }
 
-.member-statuses {
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.5rem;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.member-status {
-  width: 1.25rem;
-  height: 1.25rem;
-  border-radius: 50%;
+.proposal-badge {
+  background: #ef4444;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.8rem;
+  min-width: 1.2rem;
+  height: 1.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
+  animation: pulse-badge 2s infinite;
 }
 
-.status-indicator {
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+@keyframes pulse-badge {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
 }
 
-.member-status.status-available .status-indicator {
-  background-color: #10b981 !important;
+/* 확정된 메뉴 스타일 */
+.confirmed-meal {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid #10b981;
+  border-radius: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
-.member-status.status-meal .status-indicator {
-  background-color: #f59e0b !important;
+.confirmed-meal .meal-icon {
+  font-size: 1rem;
 }
 
-.member-status.status-vacation .status-indicator {
-  background-color: #3b82f6 !important;
+.confirmed-meal .meal-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #059669;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
 }
 
-.member-status.status-other .status-indicator {
-  background-color: #8b5cf6 !important;
+/* 제안 중인 메뉴들 스타일 */
+.proposal-meals {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.proposal-meal {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  font-size: 0.7rem;
+}
+
+.proposal-meal.pending {
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.proposal-meal.confirmed {
+  border-left: 3px solid #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.proposal-meal.rejected {
+  border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  opacity: 0.7;
+}
+
+.proposal-meal .meal-icon {
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.proposal-meal .meal-name {
+  font-weight: 500;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.more-proposals {
+  font-size: 0.65rem;
+  color: #9ca3af;
+  text-align: center;
+  padding: 0.25rem;
+  background: #f3f4f6;
+  border-radius: 0.25rem;
+  font-style: italic;
 }
 
 /* 제안 관련 스타일 */
@@ -1592,12 +1787,15 @@ export default {
   border-left: 3px solid #f59e0b;
 }
 
-.proposal-item.accepted {
+.proposal-item.confirmed {
   border-left: 3px solid #10b981;
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .proposal-item.rejected {
   border-left: 3px solid #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  opacity: 0.7;
 }
 
 .proposal-info {
@@ -1786,6 +1984,62 @@ export default {
 .vote-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.confirmation-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 2px solid #10b981;
+  border-radius: 1rem;
+  text-align: left;
+}
+
+.confirmation-icon {
+  font-size: 2rem;
+}
+
+.confirmation-text h4 {
+  color: #059669;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.confirmation-text p {
+  color: #065f46;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.rejection-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 2px solid #ef4444;
+  border-radius: 1rem;
+  text-align: left;
+}
+
+.rejection-icon {
+  font-size: 2rem;
+}
+
+.rejection-text h4 {
+  color: #dc2626;
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.rejection-text p {
+  color: #991b1b;
+  margin: 0;
+  font-size: 0.9rem;
 }
 
 .weekend-indicator {
@@ -2178,37 +2432,77 @@ export default {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-/* 모달 스타일 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
+
+/* 검색형 드롭다운 */
+.dropdown { 
+  position: relative; 
 }
 
-.modal-content {
+.dropdown-input { 
+  width: 100%; 
+  padding: 0.875rem 1rem; 
+  border: 2px solid #e2e8f0; 
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.dropdown-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   background: white;
-  border-radius: 1rem;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
+}
+
+.dropdown-list { 
+  position: absolute; 
+  left: 0; 
+  right: 0; 
+  z-index: 30; 
+  background: white; 
+  border: 2px solid #e2e8f0; 
+  border-radius: 0.75rem; 
+  margin-top: 0.5rem; 
+  max-height: 240px; 
+  overflow: auto; 
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(8px);
+}
+
+.dropdown-item { 
+  padding: 0.875rem 1rem; 
+  cursor: pointer; 
+  transition: all 0.2s ease;
+  font-weight: 500;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item:hover { 
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1e40af;
+}
+
+.dropdown-empty { 
+  padding: 0.875rem 1rem; 
+  color: #9ca3af; 
+  font-style: italic;
+  text-align: center;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 2rem 2rem 1rem 2rem;
+  border-bottom: 1px solid #f1f5f9;
+  background: linear-gradient(135deg, #fafbfc 0%, #ffffff 100%);
+  border-radius: 1.25rem 1.25rem 0 0;
 }
 
 .modal-header h3 {
@@ -2235,70 +2529,235 @@ export default {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: 0 2rem 2rem 2rem;
+  max-height: calc(90vh - 140px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
-.status-options {
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 멤버 상태 개요 */
+.member-status-overview {
+  margin-bottom: 2rem;
+}
+
+.member-status-overview h4 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 1.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.member-status-overview h4:before {
+  content: "👥";
+  font-size: 1.25rem;
+}
+
+.status-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.member-status-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.75rem;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.member-status-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.member-status-item.status-available {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+}
+
+.member-status-item.status-vacation,
+.member-status-item.status-other,
+.member-status-item.status-solo,
+.member-status-item.status-skip {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+}
+
+.member-avatar-small {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 3px solid white;
+}
+
+.member-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.member-status-info .member-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.member-status-info .status-text {
+  font-size: 0.875rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.divider {
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, #e2e8f0 50%, transparent 100%);
+  margin: 2rem 0;
+  border-radius: 1px;
+}
+
+.status-options h4 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 1.25rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-options h4:before {
+  content: "⚙️";
+  font-size: 1.25rem;
+}
+
+.status-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
-  margin-bottom: 1.5rem;
 }
 
 .status-option {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: 1rem;
+  padding: 1.25rem;
   border: 2px solid #e2e8f0;
-  border-radius: 0.75rem;
+  border-radius: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .status-option:hover {
   border-color: #3b82f6;
-  background: #eff6ff;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.status-option:has(input:checked) {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
 
 .status-option input[type="radio"] {
   margin: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: #3b82f6;
 }
 
 .status-icon {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
 .status-label {
-  font-weight: 500;
-  color: #1e293b;
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 1rem;
 }
 
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .form-group label {
   display: block;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 0.75rem;
 }
 
-.form-group input {
+.form-group input,
+.form-group textarea {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  padding: 0.875rem 1rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
   transition: all 0.2s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group textarea:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background: white;
+}
+
+.form-group small {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-top: 0.5rem;
+  display: block;
 }
 
 .participants {
@@ -2323,38 +2782,49 @@ export default {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  padding: 1.5rem;
-  border-top: 1px solid #e2e8f0;
+  padding: 1.5rem 2rem 2rem 2rem;
+  border-top: 1px solid #f1f5f9;
+  background: linear-gradient(135deg, #fafbfc 0%, #ffffff 100%);
+  border-radius: 0 0 1.25rem 1.25rem;
 }
 
 .btn-secondary {
-  background: #f8fafc;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #475569;
+  border: 2px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.875rem 1.75rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.95rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .btn-secondary:hover {
-  background: #e2e8f0;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
-  border: none;
-  border-radius: 0.5rem;
-  padding: 0.75rem 1.5rem;
+  border: 2px solid transparent;
+  border-radius: 0.75rem;
+  padding: 0.875rem 1.75rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
 }
 
 /* 반응형 */

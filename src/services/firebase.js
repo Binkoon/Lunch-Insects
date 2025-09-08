@@ -32,5 +32,10 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 console.log("Firebase 초기화 완료");
+console.log("Firebase 설정:", {
+  apiKey: firebaseConfig.apiKey ? "설정됨" : "누락",
+  authDomain: firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId
+});
 
 export { db, auth };

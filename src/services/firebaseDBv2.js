@@ -199,6 +199,62 @@ export const updateGroup = async (groupId, groupData) => {
   }
 };
 
+/**
+ * 그룹에 멤버 추가/강퇴
+ */
+export const addGroupMember = async (groupId, memberId) => {
+  try {
+    const ref = doc(db, COLLECTIONS.GROUPS, groupId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return false;
+    const data = snap.data();
+    const members = Array.isArray(data.members) ? data.members : [];
+    if (!members.includes(memberId)) members.push(memberId);
+    await updateDoc(ref, { members, updatedAt: serverTimestamp() });
+    return true;
+  } catch (e) {
+    console.error('멤버 추가 실패:', e);
+    return false;
+  }
+};
+
+export const removeGroupMember = async (groupId, memberId) => {
+  try {
+    const ref = doc(db, COLLECTIONS.GROUPS, groupId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return false;
+    const data = snap.data();
+    const members = (Array.isArray(data.members) ? data.members : []).filter(m => m !== memberId);
+    await updateDoc(ref, { members, updatedAt: serverTimestamp() });
+    return true;
+  } catch (e) {
+    console.error('멤버 강퇴 실패:', e);
+    return false;
+  }
+};
+
+/**
+ * 그룹 생성(관리자=creator)
+ */
+export const createGroupSimple = async ({ name, description = '', adminId, members = [] }) => {
+  try {
+    const allMembers = Array.from(new Set([adminId, ...members]));
+    const ref = await addDoc(collection(db, COLLECTIONS.GROUPS), {
+      name,
+      description,
+      members: allMembers,
+      admin: adminId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      isActive: true
+    });
+    return ref.id;
+  } catch (e) {
+    console.error('그룹 생성 실패:', e);
+    throw e;
+  }
+};
+
 
 // ==================== 일정 관리 ====================
 
@@ -394,6 +450,40 @@ export const getRestaurantsByCategory = async (category, limitCount = 20) => {
   }
 };
 
+// ==================== 레스토랑 메뉴 관리 ====================
+
+/**
+ * 특정 레스토랑(이름 기준)에 메뉴 배열을 병합 추가
+ * restaurantName: string
+ * menus: Array<{ name: string, price: number }>
+ */
+export const addMenusToRestaurantByName = async (restaurantName, menus) => {
+  try {
+    if (!restaurantName || !menus || menus.length === 0) return false;
+    // 레스토랑 문서 찾기 (이름 기준)
+    const q = query(collection(db, COLLECTIONS.RESTAURANTS), where('name', '==', restaurantName));
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      console.warn('레스토랑을 찾을 수 없습니다:', restaurantName);
+      return false;
+    }
+    const docRef = snap.docs[0].ref;
+    const docData = snap.docs[0].data() || {};
+    const existingMenus = Array.isArray(docData.menus) ? docData.menus : [];
+    // 간단 병합: 동일명 이름이 있으면 교체, 없으면 추가
+    const byName = new Map(existingMenus.map(m => [m.name, m]));
+    menus.forEach(m => {
+      byName.set(m.name, { name: m.name, price: m.price });
+    });
+    const merged = Array.from(byName.values());
+    await updateDoc(docRef, { menus: merged, updatedAt: serverTimestamp() });
+    return true;
+  } catch (error) {
+    console.error('레스토랑 메뉴 추가 실패:', error);
+    return false;
+  }
+};
+
 // ==================== 사용자 지출 관리 ====================
 
 /**
@@ -401,8 +491,17 @@ export const getRestaurantsByCategory = async (category, limitCount = 20) => {
  */
 export const getUserMonthlyExpenses = async (userId, year, month) => {
   try {
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59);
+    // userId가 없으면 0 반환
+    if (!userId) {
+      return { ticketPoints: 0, cash: 0, total: 0 };
+    }
+    // year, month가 제공되지 않은 경우 현재 월 사용
+    const currentDate = new Date();
+    const targetYear = year || currentDate.getFullYear();
+    const targetMonth = month || (currentDate.getMonth() + 1);
+    
+    const startDate = new Date(targetYear, targetMonth - 1, 1);
+    const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
     
     const expensesQuery = query(
       collection(db, COLLECTIONS.MENU_RECORDS),
@@ -430,7 +529,8 @@ export const getUserMonthlyExpenses = async (userId, year, month) => {
       total: totalTicketPoints + totalCash
     };
   } catch (error) {
-    console.error('월별 지출 조회 실패:', error);
+    // 쿼리 실패 시에도 UI는 0으로 동작하도록 조용히 반환
+    console.warn('월별 지출 조회 실패, 0으로 대체합니다:', error?.message || error);
     return {
       ticketPoints: 0,
       cash: 0,
@@ -456,6 +556,38 @@ export const getAllUsers = async () => {
   } catch (error) {
     console.error('사용자 조회 실패:', error);
     return [];
+  }
+};
+
+/**
+ * 레스토랑 이름으로 단일 문서 가져오기
+ */
+export const getRestaurantByName = async (name) => {
+  try {
+    const q = query(collection(db, COLLECTIONS.RESTAURANTS), where('name', '==', name), limit(1));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    const docSnap = snap.docs[0];
+    return { id: docSnap.id, ...docSnap.data() };
+  } catch (error) {
+    console.error('레스토랑 단일 조회 실패:', error);
+    return null;
+  }
+};
+
+/**
+ * 레스토랑 ID로 단일 문서 가져오기
+ */
+export const getRestaurantById = async (id) => {
+  try {
+    if (!id) return null;
+    const ref = doc(db, COLLECTIONS.RESTAURANTS, id);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() };
+  } catch (error) {
+    console.error('레스토랑 ID 조회 실패:', error);
+    return null;
   }
 };
 
@@ -724,7 +856,7 @@ export const getGroupByInviteLink = async (groupId) => {
 /**
  * 그룹에 멤버 추가
  */
-export const addGroupMember = async (groupId, userId, userData) => {
+export const addGroupMemberDetailed = async (groupId, userId, userData) => {
   try {
     const groupRef = doc(db, COLLECTIONS.GROUPS, groupId);
     const group = await getGroup(groupId);
@@ -921,6 +1053,8 @@ export const getPendingEmailInvites = async (groupId) => {
  */
 export const saveMemberStatus = async (groupId, userId, date, status, details = {}) => {
   try {
+    console.log('🔄 Firebase에 멤버 상태 저장 시도:', { groupId, userId, date, status, details });
+    
     const statusRef = doc(db, COLLECTIONS.GROUPS, groupId, 'memberStatus', `${userId}_${date}`);
     const statusData = {
       userId,
@@ -931,10 +1065,10 @@ export const saveMemberStatus = async (groupId, userId, date, status, details = 
     };
     
     await setDoc(statusRef, statusData);
-    console.log('멤버 상태 저장 성공:', { userId, date, status });
+    console.log('✅ Firebase 멤버 상태 저장 성공:', { userId, date, status });
     return { success: true };
   } catch (error) {
-    console.error('멤버 상태 저장 실패:', error);
+    console.error('❌ Firebase 멤버 상태 저장 실패:', error);
     return { success: false, error: error.message };
   }
 };
@@ -973,8 +1107,12 @@ export const getGroupMemberStatuses = async (groupId, startDate, endDate) => {
     const querySnapshot = await getDocs(q);
     const statuses = {};
     
+    console.log('📊 조회된 문서 수:', querySnapshot.size);
+    
     querySnapshot.forEach((doc) => {
       const data = doc.data();
+      console.log('📄 문서 데이터:', { docId: doc.id, data });
+      
       if (!statuses[data.date]) {
         statuses[data.date] = {};
       }
@@ -984,7 +1122,8 @@ export const getGroupMemberStatuses = async (groupId, startDate, endDate) => {
       };
     });
     
-    console.log('그룹 멤버 상태 조회 성공:', statuses);
+    console.log('✅ 그룹 멤버 상태 조회 성공:', Object.keys(statuses).length + '개 날짜');
+    console.log('📋 상태 데이터:', statuses);
     return { success: true, data: statuses };
   } catch (error) {
     console.error('그룹 멤버 상태 조회 실패:', error);
@@ -1004,5 +1143,119 @@ export const deleteMemberStatus = async (groupId, userId, date) => {
   } catch (error) {
     console.error('멤버 상태 삭제 실패:', error);
     return { success: false, error: error.message };
+  }
+};
+
+// 음식점 방문 기록 관리
+export const addRestaurantVisit = async (groupId, restaurantName, date, participants = []) => {
+  try {
+    const visitData = {
+      restaurantName,
+      date,
+      participants,
+      groupId,
+      createdAt: serverTimestamp()
+    };
+
+    const docRef = await addDoc(collection(db, 'restaurantVisits'), visitData);
+    console.log('방문 기록 추가 성공:', docRef.id);
+    return { success: true, id: docRef.id };
+  } catch (error) {
+    console.error('방문 기록 추가 실패:', error);
+    return { success: false, error };
+  }
+};
+
+export const getRestaurantVisitCounts = async (groupId, startDate = null, endDate = null) => {
+  try {
+    let q = query(
+      collection(db, 'restaurantVisits'),
+      where('groupId', '==', groupId)
+    );
+
+    // 날짜 범위 필터링
+    if (startDate) {
+      q = query(q, where('date', '>=', startDate));
+    }
+    if (endDate) {
+      q = query(q, where('date', '<=', endDate));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const visitCounts = {};
+
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      const restaurantName = data.restaurantName;
+      
+      if (visitCounts[restaurantName]) {
+        visitCounts[restaurantName]++;
+      } else {
+        visitCounts[restaurantName] = 1;
+      }
+    });
+
+    return { success: true, data: visitCounts };
+  } catch (error) {
+    console.error('방문 횟수 조회 실패:', error);
+    return { success: false, error };
+  }
+};
+
+export const getRestaurantVisitHistory = async (groupId, restaurantName = null) => {
+  try {
+    let q = query(
+      collection(db, 'restaurantVisits'),
+      where('groupId', '==', groupId),
+      orderBy('date', 'desc')
+    );
+
+    if (restaurantName) {
+      q = query(q, where('restaurantName', '==', restaurantName));
+    }
+
+    const querySnapshot = await getDocs(q);
+    const visits = [];
+
+    querySnapshot.forEach((doc) => {
+      visits.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    return { success: true, data: visits };
+  } catch (error) {
+    console.error('방문 기록 조회 실패:', error);
+    return { success: false, error };
+  }
+};
+
+// 기존 데이터 마이그레이션을 위한 함수
+export const migrateVisitData = async (groupId, visitData) => {
+  try {
+    const batch = writeBatch(db);
+    
+    for (const [restaurantName, count] of Object.entries(visitData)) {
+      // 각 방문마다 개별 문서 생성 (날짜는 임의로 설정)
+      for (let i = 0; i < count; i++) {
+        const visitRef = doc(collection(db, 'restaurantVisits'));
+        batch.set(visitRef, {
+          restaurantName,
+          date: `2024-${String(3 + Math.floor(i / 10)).padStart(2, '0')}-${String((i % 28) + 1).padStart(2, '0')}`, // 3월부터 분산
+          participants: [],
+          groupId,
+          createdAt: serverTimestamp(),
+          migrated: true
+        });
+      }
+    }
+
+    await batch.commit();
+    console.log('데이터 마이그레이션 완료');
+    return { success: true };
+  } catch (error) {
+    console.error('데이터 마이그레이션 실패:', error);
+    return { success: false, error };
   }
 };

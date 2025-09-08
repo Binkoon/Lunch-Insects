@@ -44,10 +44,14 @@
         >
           <div class="member-avatar">
             <img 
-              :src="member.avatar || '/api/placeholder/40/40'" 
+              v-if="member.avatar" 
+              :src="member.avatar" 
               :alt="member.name"
               @error="handleAvatarError"
             />
+            <div v-else class="default-avatar">
+              👤
+            </div>
             <div class="member-status" :class="getMemberStatus(member)"></div>
           </div>
           
@@ -270,6 +274,8 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue';
+import { getUser } from '@/services/firebaseDBv2.js';
+import { getCurrentUser } from '@/services/firebaseAuth.js';
 import { 
   getGroup, 
   updateGroup, 
@@ -318,7 +324,9 @@ export default {
 
     // 계산된 속성들
     const isAdmin = computed(() => {
-      return group.value.admins?.includes(props.currentUser.id) || false;
+      const currentUser = getCurrentUser();
+      if (!currentUser || !group.value?.admins) return false;
+      return group.value.admins.includes(currentUser.uid);
     });
 
     // 메서드들
@@ -340,16 +348,40 @@ export default {
 
     const loadMembers = async () => {
       try {
-        // 실제 구현에서는 멤버 정보를 가져와야 함
-        members.value = group.value.members?.map(memberId => ({
-          id: memberId,
-          name: `사용자 ${memberId}`,
-          email: `user${memberId}@example.com`,
-          avatar: null,
-          lastActiveAt: new Date()
-        })) || [];
+        if (!group.value.members || group.value.members.length === 0) {
+          members.value = [];
+          return;
+        }
+
+        // Firebase에서 실제 사용자 정보를 가져오기
+        const memberPromises = group.value.members.map(async (memberId) => {
+          try {
+            // getUser 함수를 사용하여 실제 사용자 정보 가져오기
+            const userData = await getUser(memberId);
+            return {
+              id: memberId,
+              name: userData?.name || `사용자 ${memberId.slice(-4)}`,
+              email: userData?.email || `user${memberId.slice(-4)}@example.com`,
+              avatar: userData?.avatar || null,
+              lastActiveAt: userData?.lastActiveAt || new Date()
+            };
+          } catch (error) {
+            console.error(`사용자 ${memberId} 정보 로드 실패:`, error);
+            // 사용자 정보를 가져올 수 없는 경우 기본값 사용
+            return {
+              id: memberId,
+              name: `사용자 ${memberId.slice(-4)}`,
+              email: `user${memberId.slice(-4)}@example.com`,
+              avatar: null,
+              lastActiveAt: new Date()
+            };
+          }
+        });
+
+        members.value = await Promise.all(memberPromises);
       } catch (error) {
         console.error('멤버 데이터 로드 실패:', error);
+        members.value = [];
       }
     };
 
@@ -693,6 +725,18 @@ export default {
   height: var(--rem-48);
   border-radius: 50%;
   object-fit: cover;
+}
+
+.default-avatar {
+  width: var(--rem-48);
+  height: var(--rem-48);
+  border-radius: 50%;
+  background-color: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--rem-24);
+  color: #6b7280;
 }
 
 .member-status {

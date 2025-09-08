@@ -29,14 +29,22 @@
           
           <div class="user-info">
             <img 
-              :src="currentUser.avatar || '/api/placeholder/40/40'" 
+              v-if="currentUser.avatar" 
+              :src="currentUser.avatar" 
               :alt="currentUser.name"
               class="user-avatar"
             />
+            <div v-else class="user-avatar default-avatar">
+              👤
+            </div>
             <span class="user-name">{{ currentUser.name }}</span>
           </div>
           
-          <button class="group-btn" @click="openGroupManagement">
+          <button 
+            v-if="isGroupAdmin" 
+            class="group-btn" 
+            @click="openGroupManagement"
+          >
             <i class="icon-users">👥</i>
             그룹 관리
           </button>
@@ -63,9 +71,12 @@
           </div>
           
           <GroupCalendar 
-            :groupId="currentGroup?.id"
-            :members="currentGroup?.members || []"
+            v-if="currentGroup && currentGroup.id"
+            :groupId="currentGroup.id"
+            :members="membersForCalendar"
             @date-selected="handleDateSelected"
+            @open-status-modal="openStatusModal"
+            @status-updated="handleStatusUpdated"
           />
         </section>
 
@@ -294,8 +305,8 @@
               <h4>메뉴판</h4>
               <div class="menu-list">
                 <div 
-                  v-for="menu in selectedRestaurantDetail.menu" 
-                  :key="menu.id"
+                  v-for="menu in (selectedRestaurantDetail.menus || selectedRestaurantDetail.menu || [])" 
+                  :key="menu.id || menu.name"
                   class="menu-item"
                 >
                   <div class="menu-info">
@@ -318,17 +329,172 @@
         </div>
       </div>
     </div>
+
+    <!-- 멤버 상태 편집 모달 (전체 화면 오버레이) -->
+    <Teleport to="body">
+      <div v-if="showStatusModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+          <div class="flex justify-between items-center p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+            <h3 class="text-xl font-bold text-gray-900">
+              {{ modalData.member?.name }} - {{ modalData.date }} 상태 편집
+            </h3>
+            <button @click="closeStatusModal" class="text-gray-400 hover:text-gray-600 text-2xl">×</button>
+          </div>
+          
+          <div class="p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
+            <!-- 다른 멤버들의 상태 표시 -->
+            <div class="mb-8">
+              <h4 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                👥 팀원들 상태
+              </h4>
+              <div class="space-y-3 max-h-60 overflow-y-auto p-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200">
+                <div 
+                  v-for="member in modalData.allMembers" 
+                  :key="member.id"
+                  class="flex items-center gap-4 p-4 bg-white rounded-lg border-2 transition-all hover:shadow-md"
+                  :class="getMemberStatusClass(modalData.date, member.id)"
+                >
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-lg border-2 border-white"
+                       :style="{ backgroundColor: member.color }">
+                    {{ member.name.charAt(0) }}
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-semibold text-gray-900">{{ member.name }}</div>
+                    <div class="text-sm font-medium text-gray-600">{{ getMemberStatusText(modalData.date, member.id) }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="h-0.5 bg-gradient-to-r from-transparent via-gray-300 to-transparent mb-8"></div>
+            
+            <div class="mb-6">
+              <h4 class="text-lg font-bold text-gray-900 mb-5 flex items-center gap-2">
+                ⚙️ 내 상태 설정
+              </h4>
+              <div class="grid grid-cols-2 gap-4">
+                <label 
+                  v-for="status in statusOptions" 
+                  :key="status.value"
+                  class="flex items-center gap-4 p-5 border-2 border-gray-200 rounded-xl cursor-pointer transition-all hover:border-blue-500 hover:bg-blue-50 hover:-translate-y-0.5 hover:shadow-lg"
+                  :class="{ 'border-blue-500 bg-blue-50 shadow-lg': editingStatus === status.value }"
+                >
+                  <input 
+                    type="radio" 
+                    :value="status.value" 
+                    v-model="editingStatus"
+                    class="w-5 h-5 accent-blue-500"
+                  />
+                  <span class="text-2xl drop-shadow">{{ status.icon }}</span>
+                  <span class="font-semibold text-gray-900">{{ status.label }}</span>
+                </label>
+              </div>
+            </div>
+            
+            <!-- 가능 선택 시 제안 입력 -->
+            <div v-if="editingStatus === 'available'" class="space-y-6">
+              <div>
+                <label class="block text-base font-semibold text-gray-900 mb-3">음식점 제안</label>
+                <div class="relative">
+                  <input 
+                    class="w-full p-4 border-2 border-gray-200 rounded-xl text-base transition-all focus:border-blue-500 focus:shadow-lg bg-gradient-to-br from-white to-gray-50"
+                    v-model="mealDetails.restaurant"
+                    placeholder="음식점 검색"
+                    @focus="dropdownOpen = true"
+                    @input="dropdownOpen = true"
+                    @blur="setTimeout(() => dropdownOpen = false, 150)"
+                  />
+                  <div v-if="dropdownOpen && modalData.restaurants?.length" 
+                       class="absolute left-0 right-0 z-30 bg-white border-2 border-gray-200 rounded-xl mt-2 max-h-60 overflow-auto shadow-2xl">
+                    <div
+                      v-for="r in modalData.restaurants.filter(rest => rest.toLowerCase().includes((mealDetails.restaurant || '').toLowerCase()))"
+                      :key="r"
+                      class="p-4 cursor-pointer transition-all hover:bg-blue-50 border-b border-gray-100 last:border-b-0 font-medium"
+                      @mousedown.prevent="mealDetails.restaurant = r; dropdownOpen = false"
+                    >
+                      {{ r }}
+                    </div>
+                  </div>
+                </div>
+                <div class="text-sm text-gray-600 mt-2">목록에 없으면 그대로 입력하세요.</div>
+              </div>
+              
+              <div>
+                <label class="block text-base font-semibold text-gray-900 mb-3">메뉴</label>
+                <input 
+                  v-model="mealDetails.menu"
+                  placeholder="먹은 메뉴를 입력하세요"
+                  class="w-full p-4 border-2 border-gray-200 rounded-xl text-base transition-all focus:border-blue-500 focus:shadow-lg bg-gradient-to-br from-white to-gray-50"
+                />
+              </div>
+              
+              <div>
+                <label class="block text-base font-semibold text-gray-900 mb-3">참여 멤버</label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label 
+                    v-for="member in modalData.allMembers" 
+                    :key="member.id"
+                    class="flex items-center gap-3 text-base cursor-pointer"
+                  >
+                    <input 
+                      type="checkbox" 
+                      :value="member.id" 
+                      v-model="mealDetails.participants"
+                      class="w-4 h-4 accent-blue-500"
+                    />
+                    {{ member.name }}
+                  </label>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 휴가 정보 -->
+            <div v-if="editingStatus === 'vacation'" class="space-y-6">
+              <div>
+                <label class="block text-base font-semibold text-gray-900 mb-3">휴가 사유</label>
+                <input 
+                  v-model="vacationDetails.reason"
+                  placeholder="휴가 사유를 입력하세요"
+                  class="w-full p-4 border-2 border-gray-200 rounded-xl text-base transition-all focus:border-blue-500 focus:shadow-lg bg-gradient-to-br from-white to-gray-50"
+                />
+              </div>
+            </div>
+            
+            <!-- 다른 약속 정보 -->
+            <div v-if="editingStatus === 'other'" class="space-y-6">
+              <div>
+                <label class="block text-base font-semibold text-gray-900 mb-3">약속 내용</label>
+                <input 
+                  v-model="otherDetails.description"
+                  placeholder="약속 내용을 입력하세요"
+                  class="w-full p-4 border-2 border-gray-200 rounded-xl text-base transition-all focus:border-blue-500 focus:shadow-lg bg-gradient-to-br from-white to-gray-50"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex justify-end gap-4 p-6 border-t border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+            <button @click="closeStatusModal" class="px-6 py-3 bg-gradient-to-br from-gray-100 to-gray-200 text-gray-700 font-semibold rounded-xl hover:from-gray-200 hover:to-gray-300 hover:-translate-y-0.5 transition-all shadow-lg">
+              취소
+            </button>
+            <button @click="saveStatus" class="px-6 py-3 bg-gradient-to-br from-blue-500 to-blue-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-blue-700 hover:-translate-y-0.5 transition-all shadow-lg">
+              저장
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { Chart, registerables } from 'chart.js';
-// 코드 스플리팅을 위한 동적 import
-const GroupCalendar = () => import('@/components/Features/GroupCalendar.vue');
-const GroupManagement = () => import('@/components/Features/GroupManagement.vue');
-import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups } from '@/services/firebaseDBv2.js';
-import { getCurrentUser, logout } from '@/services/firebaseAuth.js';
+// 코드 스플리팅을 위한 비동기 컴포넌트 등록
+const GroupCalendar = defineAsyncComponent(() => import('@/components/Features/GroupCalendar.vue'));
+const GroupManagement = defineAsyncComponent(() => import('@/components/Features/GroupManagement.vue'));
+import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups, getRestaurantByName } from '@/services/firebaseDBv2.js';
+import { getCurrentUser, logout, onAuthStateChange } from '@/services/firebaseAuth.js';
 import { DEFAULT_LOCATION, DEFAULT_USER, DEFAULT_GROUP } from '@/config/constants.js';
 
 // Chart.js 등록
@@ -358,22 +524,64 @@ export default {
         lng: null
       }
     });
-    
-    const currentGroup = ref({
-      id: 'group1',
-      name: '개발팀',
-      members: [
-        { id: 'user1', name: '김철수', color: '#ff6b6b' },
-        { id: 'user2', name: '이영희', color: '#4ecdc4' },
-        { id: 'user3', name: '박민수', color: '#45b7d1' },
-        { id: 'user4', name: '정수진', color: '#96ceb4' }
-      ]
+
+    // 모달 상태
+    const showStatusModal = ref(false);
+    const modalData = ref({});
+    const editingStatus = ref('');
+    const mealDetails = ref({
+      restaurant: '',
+      menu: '',
+      participants: []
     });
+    const vacationDetails = ref({
+      reason: ''
+    });
+    const otherDetails = ref({
+      description: ''
+    });
+    const dropdownOpen = ref(false);
+    
+    const currentGroup = ref(null);
     
     // 개인 지출 데이터 (사용자 데이터에서 가져옴)
     const userExpenses = computed(() => currentUser.value.expenses || {
       ticketPoints: 0,
       cash: 0
+    });
+    
+    // 캘린더용 멤버 데이터 정규화
+    const membersForCalendar = computed(() => {
+      if (!currentGroup.value?.members) return [];
+      
+      return currentGroup.value.members.map(member => {
+        // 이미 객체 형태인 경우 그대로 반환
+        if (typeof member === 'object' && member.id && member.name) {
+          return member;
+        }
+        
+        // UID만 있는 경우 기본 객체로 변환
+        if (typeof member === 'string') {
+          return {
+            id: member,
+            name: `사용자 ${member.slice(-4)}`, // 임시 이름
+            color: `#${Math.floor(Math.random()*16777215).toString(16)}` // 랜덤 색상
+          };
+        }
+        
+        // 기타 경우 기본값 반환
+        return {
+          id: member?.id || 'unknown',
+          name: member?.name || '알 수 없음',
+          color: member?.color || '#6b7280'
+        };
+      });
+    });
+
+    // 그룹장 여부 확인
+    const isGroupAdmin = computed(() => {
+      if (!currentUser.value?.id || !currentGroup.value?.admins) return false;
+      return currentGroup.value.admins.includes(currentUser.value.id);
     });
     
     // 현재 위치 정보 (사용자 데이터에서 가져옴)
@@ -418,75 +626,243 @@ export default {
       }
     };
 
-    // 사용자 데이터 로드
+    // 인증된 사용자 데이터 로드 (onAuthStateChange에서 호출)
+    const loadUserDataFromAuth = async (authUser) => {
+      try {
+        console.log('인증된 사용자 데이터 로드 시작:', authUser.email);
+        console.log('사용자 UID:', authUser.uid);
+        
+        // Firestore에서 사용자 정보 가져오기 (UID로 직접 검색)
+        const userData = await getUser(authUser.uid);
+        console.log('Firestore 사용자 데이터:', userData);
+        
+        if (userData) {
+          currentUser.value = {
+            id: userData.id,
+            name: userData.name || '사용자',
+            email: userData.email,
+            avatar: userData.avatar,
+            expenses: userData.expenses || {
+              ticketPoints: 0,
+              cash: 0
+            },
+            location: userData.location || {
+              name: '한진빌딩',
+              address: '서울특별시 중구 남대문로 63',
+              lat: 37.5665,
+              lng: 126.9780
+            }
+          };
+          console.log('Firestore 데이터로 사용자 설정 완료:', currentUser.value);
+        } else {
+          // Firestore에 사용자 데이터가 없는 경우 기본값 사용
+          currentUser.value = {
+            ...DEFAULT_USER,
+            id: authUser.uid,
+            name: authUser.displayName || DEFAULT_USER.name,
+            email: authUser.email,
+            avatar: authUser.photoURL
+          };
+          console.log('기본값으로 사용자 설정 완료:', currentUser.value);
+        }
+        console.log('사용자 데이터 로드 완료:', currentUser.value.name);
+        
+        // 이번달 지출액 로드
+        await loadMonthlyExpenses();
+      } catch (error) {
+        console.error('사용자 데이터 로드 실패:', error);
+        console.error('오류 상세:', error.message);
+        currentUser.value = null;
+      }
+    };
+
+    // 사용자 데이터 로드 (기존 함수, 초기 로드용)
     const loadUserData = async () => {
       try {
         const authUser = getCurrentUser();
         console.log('현재 사용자:', authUser);
         
         if (authUser) {
-          // Firestore에서 사용자 정보 가져오기 (UID로 직접 검색)
-          const userData = await getUser(authUser.uid);
-          console.log('Firestore 사용자 데이터:', userData);
-          
-          if (userData) {
-            currentUser.value = {
-              id: userData.id,
-              name: userData.name || '사용자',
-              email: userData.email,
-              avatar: userData.avatar,
-              expenses: userData.expenses || {
-                ticketPoints: 0,
-                cash: 0
-              },
-              location: userData.location || {
-                name: '한진빌딩',
-                address: '서울특별시 중구 남대문로 63',
-                lat: 37.5665,
-                lng: 126.9780
-              }
-            };
-          } else {
-                  // Firestore에 사용자 데이터가 없는 경우 기본값 사용
-                  currentUser.value = {
-                    ...DEFAULT_USER,
-                    id: authUser.uid,
-                    name: authUser.displayName || DEFAULT_USER.name,
-                    email: authUser.email,
-                    avatar: authUser.photoURL
-                  };
-          }
-          console.log('사용자 데이터 로드 완료:', currentUser.value.name);
-          
-          // 이번달 지출액 로드
-          await loadMonthlyExpenses();
+          console.log('Firebase 인증 사용자:', authUser.email);
+          await loadUserDataFromAuth(authUser);
         } else {
           console.log('로그인되지 않은 상태입니다.');
-          // 로그인하지 않은 상태에서도 기본 사용자 정보 설정
-          currentUser.value = DEFAULT_USER;
+          // 로그인하지 않은 경우 Auth 페이지로 리다이렉트
+          window.location.href = '/auth';
+          return;
         }
       } catch (error) {
         console.error('사용자 데이터 로드 실패:', error);
       }
     };
 
-    // 이번달 지출액 로드 (현재는 0으로 설정)
+    // 이번달 지출액 로드 (실제 Firebase 데이터 사용)
     const loadMonthlyExpenses = async () => {
       try {
         if (currentUser.value.id && currentUser.value.id !== 'guest') {
           console.log('이번달 지출액 로드 시작...');
           
-          // 현재는 0으로 설정
-          currentUser.value.expenses = {
-            ticketPoints: 0,
-            cash: 0,
-            total: 0
-          };
+          // Firebase에서 실제 월별 지출 데이터 가져오기
+          const expenses = await getUserMonthlyExpenses(currentUser.value.id);
+          
+          if (expenses) {
+            currentUser.value.expenses = {
+              ticketPoints: expenses.ticketPoints || 0,
+              cash: expenses.cash || 0,
+              total: (expenses.ticketPoints || 0) + (expenses.cash || 0)
+            };
+          } else {
+            // 데이터가 없는 경우 기본값 설정
+            currentUser.value.expenses = {
+              ticketPoints: 0,
+              cash: 0,
+              total: 0
+            };
+          }
           
           console.log('이번달 지출액 로드 완료:', currentUser.value.expenses);
         }
       } catch (error) {
         console.error('이번달 지출액 로드 실패:', error);
+        // 오류 시 기본값 설정
+        currentUser.value.expenses = {
+          ticketPoints: 0,
+          cash: 0,
+          total: 0
+        };
+      }
+    };
+
+    // 월별 지출 데이터 로드 (그래프용)
+    const loadMonthlyExpenseData = async () => {
+      try {
+        if (currentUser.value.id && currentUser.value.id !== 'guest') {
+          console.log('월별 지출 데이터 로드 시작...');
+          
+          // 최근 6개월 데이터 가져오기
+          const currentDate = new Date();
+          const months = [];
+          
+          for (let i = 5; i >= 0; i--) {
+            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+            months.push(date);
+          }
+          
+          // 각 월별 데이터 수집
+          const monthlyData = await Promise.all(
+            months.map(async (month) => {
+              try {
+                const expenses = await getUserMonthlyExpenses(
+                  currentUser.value.id, 
+                  month.getFullYear(), 
+                  month.getMonth() + 1
+                );
+                return {
+                  month: month.getMonth(),
+                  ticketPoints: expenses?.ticketPoints || 0,
+                  cash: expenses?.cash || 0
+                };
+              } catch (error) {
+                console.error(`월별 데이터 로드 실패 (${month.getFullYear()}-${month.getMonth() + 1}):`, error);
+                return {
+                  month: month.getMonth(),
+                  ticketPoints: 0,
+                  cash: 0
+                };
+              }
+            })
+          );
+          
+          // 데이터 정리
+          monthlyExpenseData.value.personal = {
+            ticketPoints: monthlyData.map(d => d.ticketPoints),
+            cash: monthlyData.map(d => d.cash)
+          };
+          
+          // 그룹 멤버들의 월별 지출 데이터도 로드
+          if (currentGroup.value?.members && currentGroup.value.members.length > 0) {
+            await loadGroupMonthlyExpenseData();
+          }
+          
+          console.log('월별 지출 데이터 로드 완료:', monthlyExpenseData.value.personal);
+        }
+      } catch (error) {
+        console.error('월별 지출 데이터 로드 실패:', error);
+      }
+    };
+
+    // 그룹 멤버들의 월별 지출 데이터 로드
+    const loadGroupMonthlyExpenseData = async () => {
+      try {
+        if (!currentGroup.value?.members || currentGroup.value.members.length === 0) {
+          monthlyExpenseData.value.group = {};
+          return;
+        }
+
+        console.log('그룹 월별 지출 데이터 로드 시작...');
+        
+        // 최근 6개월 데이터 가져오기
+        const currentDate = new Date();
+        const months = [];
+        
+        for (let i = 5; i >= 0; i--) {
+          const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+          months.push(date);
+        }
+
+        // 각 멤버별로 월별 데이터 수집
+        const groupData = {};
+        
+        for (const memberId of currentGroup.value.members) {
+          try {
+            // 멤버 정보 가져오기
+            const memberData = await getUser(memberId);
+            const memberName = memberData?.name || `사용자 ${memberId.slice(-4)}`;
+            
+            // 각 월별 데이터 수집
+            const monthlyData = await Promise.all(
+              months.map(async (month) => {
+                try {
+                  const expenses = await getUserMonthlyExpenses(
+                    memberId, 
+                    month.getFullYear(), 
+                    month.getMonth() + 1
+                  );
+                  return {
+                    month: month.getMonth(),
+                    ticketPoints: expenses?.ticketPoints || 0,
+                    cash: expenses?.cash || 0
+                  };
+                } catch (error) {
+                  console.error(`멤버 ${memberName} 월별 데이터 로드 실패 (${month.getFullYear()}-${month.getMonth() + 1}):`, error);
+                  return {
+                    month: month.getMonth(),
+                    ticketPoints: 0,
+                    cash: 0
+                  };
+                }
+              })
+            );
+            
+            groupData[memberName] = {
+              ticketPoints: monthlyData.map(d => d.ticketPoints),
+              cash: monthlyData.map(d => d.cash)
+            };
+          } catch (error) {
+            console.error(`멤버 ${memberId} 정보 로드 실패:`, error);
+            const memberName = `사용자 ${memberId.slice(-4)}`;
+            groupData[memberName] = {
+              ticketPoints: [0, 0, 0, 0, 0, 0],
+              cash: [0, 0, 0, 0, 0, 0]
+            };
+          }
+        }
+        
+        monthlyExpenseData.value.group = groupData;
+        console.log('그룹 월별 지출 데이터 로드 완료:', groupData);
+      } catch (error) {
+        console.error('그룹 월별 지출 데이터 로드 실패:', error);
+        monthlyExpenseData.value.group = {};
       }
     };
 
@@ -522,9 +898,17 @@ export default {
     const loadGroupData = async () => {
       try {
         console.log('그룹 데이터 로드 시작...');
+        console.log('현재 사용자 ID:', currentUser.value?.id);
+        
+        if (!currentUser.value?.id) {
+          console.log('사용자 ID가 없어서 그룹 데이터를 로드할 수 없습니다.');
+          currentGroup.value = null;
+          return;
+        }
         
         // 사용자의 그룹 목록에서 첫 번째 그룹 가져오기
         const userGroups = await getUserGroups(currentUser.value.id);
+        console.log('사용자 그룹 목록:', userGroups);
         
         if (userGroups && userGroups.length > 0) {
           const group = userGroups[0]; // 첫 번째 그룹 사용
@@ -536,6 +920,7 @@ export default {
         }
       } catch (error) {
         console.error('그룹 데이터 로드 실패:', error);
+        console.error('오류 상세:', error.message);
         currentGroup.value = null;
       }
     };
@@ -559,6 +944,13 @@ export default {
     // 그래프 관련
     const selectedChartType = ref('personal');
     const expenseChart = ref(null);
+    const monthlyExpenseData = ref({
+      personal: {
+        ticketPoints: [0, 0, 0, 0, 0, 0],
+        cash: [0, 0, 0, 0, 0, 0]
+      },
+      group: {}
+    });
     
     // 제안 관련
     const selectedDateForProposal = ref(null);
@@ -648,6 +1040,7 @@ export default {
     
     const handleGroupUpdated = (group) => {
       currentGroup.value = group;
+      console.log('그룹 업데이트됨:', group);
     };
     
     const refreshRecommendations = async () => {
@@ -690,8 +1083,23 @@ export default {
       selectedRestaurant.value = restaurant;
     };
     
-    const viewDetails = (restaurant) => {
-      selectedRestaurantDetail.value = restaurant;
+    const viewDetails = async (restaurant) => {
+      try {
+        // 레스토랑 이름으로 상세(특히 menus, id)를 우선 보강
+        const dbRestaurant = await getRestaurantByName(restaurant.name);
+        if (dbRestaurant) {
+          selectedRestaurantDetail.value = {
+            ...restaurant,
+            id: dbRestaurant.id,
+            menus: dbRestaurant.menus || dbRestaurant.menu || []
+          };
+        } else {
+          selectedRestaurantDetail.value = restaurant;
+        }
+      } catch (e) {
+        console.warn('레스토랑 상세 조회 실패, 전달값으로 표시:', e);
+        selectedRestaurantDetail.value = restaurant;
+      }
       showRestaurantModal.value = true;
     };
     
@@ -761,7 +1169,8 @@ export default {
       const ctx = expenseChart.value.getContext('2d');
       
       if (selectedChartType.value === 'personal') {
-        // 개인 소비 - 꺾은선 그래프
+        // 개인 소비 - 꺾은선 그래프 (실제 데이터 사용)
+        const data = monthlyExpenseData.value.personal;
         window.chartInstance = new Chart(ctx, {
           type: 'line',
           data: {
@@ -769,7 +1178,7 @@ export default {
             datasets: [
               {
                 label: '식권포인트',
-                data: [12000, 15000, 18000, 14000, 16000, 20000],
+                data: data.ticketPoints,
                 borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                 tension: 0.4,
@@ -777,7 +1186,7 @@ export default {
               },
               {
                 label: '현금',
-                data: [8000, 12000, 10000, 15000, 13000, 18000],
+                data: data.cash,
                 borderColor: '#10b981',
                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
                 tension: 0.4,
@@ -812,83 +1221,238 @@ export default {
           }
         });
       } else {
-        // 그룹 소비 - 막대 그래프
-        const memberData = [
-          { name: '김철수', color: '#3b82f6' },
-          { name: '이영희', color: '#10b981' },
-          { name: '박민수', color: '#f59e0b' },
-          { name: '정수진', color: '#ef4444' },
-          { name: '최동현', color: '#8b5cf6' }
-        ];
+        // 그룹 소비 - 막대 그래프 (멤버 이름을 x축, 각 멤버별 합계 금액)
+        const groupData = monthlyExpenseData.value.group;
         
-        const datasets = [];
-        memberData.forEach(member => {
-          const ticketPoints = [12000, 15000, 18000, 14000, 16000, 20000].map(v => v + Math.random() * 5000);
-          const cash = [8000, 12000, 10000, 15000, 13000, 18000].map(v => v + Math.random() * 3000);
+        if (groupData && Object.keys(groupData).length > 0) {
+          const memberNames = Object.keys(groupData);
           
-          datasets.push({
-            label: `${member.name} (식권포인트)`,
-            data: ticketPoints,
-            backgroundColor: member.color + '80',
-            borderColor: member.color,
-            borderWidth: 1,
-            borderRadius: 4
-          });
+          // 각 멤버별 6개월 합계 계산
+          const sumArray = (arr) => (arr || []).reduce((acc, v) => acc + (Number(v) || 0), 0);
+          const ticketTotals = memberNames.map(name => sumArray(groupData[name]?.ticketPoints));
+          const cashTotals = memberNames.map(name => sumArray(groupData[name]?.cash));
           
-          datasets.push({
-            label: `${member.name} (현금)`,
-            data: cash,
-            backgroundColor: member.color + '40',
-            borderColor: member.color,
-            borderWidth: 1,
-            borderRadius: 4
-          });
-        });
-        
-        window.chartInstance = new Chart(ctx, {
-          type: 'bar',
-          data: {
-            labels: ['1월', '2월', '3월', '4월', '5월', '6월'],
-            datasets: datasets
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              title: {
-                display: true,
-                text: '그룹 소비 분석',
-                font: { size: 16, weight: 'bold' }
-              },
-              legend: {
-                position: 'top',
-                labels: { usePointStyle: true, padding: 15 }
-              }
+          window.chartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+              labels: memberNames,
+              datasets: [
+                {
+                  label: '식권포인트',
+                  data: ticketTotals,
+                  backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                  borderColor: '#3b82f6',
+                  borderWidth: 1,
+                  borderRadius: 4
+                },
+                {
+                  label: '현금',
+                  data: cashTotals,
+                  backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                  borderColor: '#10b981',
+                  borderWidth: 1,
+                  borderRadius: 4
+                }
+              ]
             },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  callback: function(value) {
-                    return value.toLocaleString() + '원';
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                title: {
+                  display: true,
+                  text: '그룹 소비 분석',
+                  font: { size: 16, weight: 'bold' }
+                },
+                legend: {
+                  position: 'top',
+                  labels: { usePointStyle: true, padding: 15 }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    callback: function(value) {
+                      return value.toLocaleString() + '원';
+                    }
                   }
+                },
+                x: {
+                  ticks: { maxRotation: 45, minRotation: 0 }
                 }
               }
             }
-          }
-        });
+          });
+        }
       }
     };
     
+    // 인증 상태 감지
+    const setupAuthListener = () => {
+      const unsubscribe = onAuthStateChange(async (user) => {
+        console.log('인증 상태 변경 감지:', user ? user.email : '로그아웃');
+        if (user) {
+          console.log('사용자 로그인 상태 감지:', user.email);
+          // 사용자 데이터 로드
+          await loadUserDataFromAuth(user);
+          await loadGroupData();
+          await loadRestaurants();
+          await loadStatsData();
+          await loadMonthlyExpenseData();
+          setTimeout(() => {
+            drawChart();
+          }, 100);
+        } else {
+          console.log('사용자 로그아웃 상태 감지');
+          // 로그아웃 상태로 설정
+          currentUser.value = null;
+          currentGroup.value = null;
+          window.location.href = '/auth';
+        }
+      });
+      
+      // 컴포넌트 언마운트 시 리스너 정리
+      return unsubscribe;
+    };
+
+    // 인증 상태 리스너 정리를 위한 변수
+    let authUnsubscribe = null;
+
     // 컴포넌트 마운트 시 데이터 로드 및 그래프 초기화
     onMounted(async () => {
-      await loadUserData();
-      await loadGroupData();
-      await loadRestaurants();
-      await loadStatsData();
-      setTimeout(() => {
-        drawChart();
-      }, 100);
+      // 인증 상태 감지 설정
+      authUnsubscribe = setupAuthListener();
+      
+      // 초기 로드 (인증 상태 감지가 처리함)
+      const authUser = getCurrentUser();
+      if (authUser) {
+        console.log('초기 로드 - 인증된 사용자:', authUser.email);
+        await loadUserDataFromAuth(authUser);
+        await loadGroupData();
+        await loadRestaurants();
+        await loadStatsData();
+        await loadMonthlyExpenseData();
+        setTimeout(() => {
+          drawChart();
+        }, 100);
+      } else {
+        console.log('초기 로드 - 인증되지 않은 사용자');
+      }
+    });
+
+    // 컴포넌트 언마운트 시 리스너 정리
+    // 모달 관련 함수들
+    const statusOptions = [
+      { value: '', label: '미정', icon: '❔' },
+      { value: 'available', label: '가능', icon: '✅' },
+      { value: 'vacation', label: '휴가(불가능)', icon: '🏖️' },
+      { value: 'other', label: '다른 약속(불가능)', icon: '📅' },
+      { value: 'solo', label: '혼밥 예정(불가능)', icon: '🍱' },
+      { value: 'skip', label: '밥 스킵(불가능)', icon: '⏭️' }
+    ];
+
+    const openStatusModal = (data) => {
+      modalData.value = data;
+      editingStatus.value = data.currentStatus;
+      showStatusModal.value = true;
+      
+      // 상태별 기존 데이터 로드
+      const existingStatus = data.memberStatuses[data.date]?.[data.member.id];
+      if (existingStatus) {
+        if (existingStatus.status === 'available') {
+          mealDetails.value = {
+            restaurant: existingStatus.details.restaurant || '',
+            menu: existingStatus.details.menu || '',
+            participants: existingStatus.details.participants || []
+          };
+        } else if (existingStatus.status === 'vacation') {
+          vacationDetails.value = {
+            reason: existingStatus.details.reason || ''
+          };
+        } else if (existingStatus.status === 'other') {
+          otherDetails.value = {
+            description: existingStatus.details.description || ''
+          };
+        }
+      } else {
+        // 기본값으로 초기화
+        mealDetails.value = { restaurant: '', menu: '', participants: [] };
+        vacationDetails.value = { reason: '' };
+        otherDetails.value = { description: '' };
+      }
+      
+      showStatusModal.value = true;
+    };
+
+    const closeStatusModal = () => {
+      showStatusModal.value = false;
+      modalData.value = {};
+      editingStatus.value = '';
+    };
+
+    const saveStatus = async () => {
+      // 여기서 실제 저장 로직 구현
+      console.log('상태 저장:', {
+        member: modalData.value.member,
+        date: modalData.value.date,
+        status: editingStatus.value,
+        details: getStatusDetails()
+      });
+      
+      closeStatusModal();
+    };
+
+    const getStatusDetails = () => {
+      if (editingStatus.value === 'available') {
+        return {
+          restaurant: mealDetails.value.restaurant,
+          menu: mealDetails.value.menu,
+          participants: mealDetails.value.participants
+        };
+      } else if (editingStatus.value === 'vacation') {
+        return {
+          reason: vacationDetails.value.reason
+        };
+      } else if (editingStatus.value === 'other') {
+        return {
+          description: otherDetails.value.description
+        };
+      }
+      return {};
+    };
+
+    const getMemberStatusClass = (date, memberId) => {
+      const memberStatus = modalData.value.memberStatuses?.[date]?.[memberId]?.status;
+      return {
+        'status-available': memberStatus === 'available',
+        'status-vacation': memberStatus === 'vacation',
+        'status-other': memberStatus === 'other',
+        'status-solo': memberStatus === 'solo',
+        'status-skip': memberStatus === 'skip'
+      };
+    };
+
+    const getMemberStatusText = (date, memberId) => {
+      const memberStatus = modalData.value.memberStatuses?.[date]?.[memberId]?.status;
+      const statusTexts = {
+        'available': '가능',
+        'vacation': '휴가',
+        'other': '다른 약속',
+        'solo': '혼밥 예정',
+        'skip': '밥 스킵'
+      };
+      return statusTexts[memberStatus] || '미정';
+    };
+
+    const handleStatusUpdated = () => {
+      console.log('상태 업데이트됨');
+    };
+
+    onUnmounted(() => {
+      if (authUnsubscribe) {
+        authUnsubscribe();
+      }
     });
     
     return {
@@ -896,6 +1460,8 @@ export default {
       currentUser,
       currentGroup,
       userExpenses,
+      membersForCalendar,
+      isGroupAdmin,
       currentLocation,
       nearbyStats,
       restaurants,
@@ -911,6 +1477,7 @@ export default {
       filteredRestaurants,
       selectedChartType,
       expenseChart,
+      monthlyExpenseData,
       selectedDateForProposal,
       openAddEventModal,
       closeAddEventModal,
@@ -933,11 +1500,29 @@ export default {
       drawChart,
       loadRestaurants,
       loadUserData,
+      loadUserDataFromAuth,
       loadGroupData,
       loadMonthlyExpenses,
+      loadMonthlyExpenseData,
+      loadGroupMonthlyExpenseData,
       loadStatsData,
       handleLogout,
-      getCategoryName
+      getCategoryName,
+      // 모달 관련
+      showStatusModal,
+      modalData,
+      editingStatus,
+      mealDetails,
+      vacationDetails,
+      otherDetails,
+      dropdownOpen,
+      statusOptions,
+      openStatusModal,
+      closeStatusModal,
+      saveStatus,
+      getMemberStatusClass,
+      getMemberStatusText,
+      handleStatusUpdated
     };
   }
 };
@@ -948,6 +1533,7 @@ export default {
   min-height: 100vh;
   background: #ffffff;
   font-family: 'Noto Sans KR', sans-serif;
+  overflow-x: hidden;
 }
 
 /* 헤더 */
@@ -1046,6 +1632,19 @@ export default {
   border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
+.default-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
 .user-name {
   font-weight: 600;
   font-size: 1.1rem;
@@ -1098,6 +1697,7 @@ export default {
 /* 메인 컨텐츠 */
 .main-content {
   padding: 2rem;
+  box-sizing: border-box;
   width: 100%;
   margin: 0;
 }

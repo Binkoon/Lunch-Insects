@@ -318,7 +318,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-// import { login, signup, resetPassword, devAutoLogin } from '@/services/firebaseAuth';
+import { login, signup, resetPassword, devAutoLogin } from '@/services/firebaseAuth';
 
 export default {
   name: 'Auth',
@@ -527,29 +527,38 @@ export default {
       }
     };
     
-    // 개발용 계정 생성 (목업)
+    // 개발용 계정 생성
     const devSignup = async () => {
       loading.value = true;
       clearErrors();
       
       try {
-        // 목업 계정 생성 처리
-        await new Promise(resolve => setTimeout(resolve, 1500)); // 로딩 시뮬레이션
+        // 개발용 계정 정보 설정
+        const userData = {
+          name: '개발자',
+          preferences: ['korean', 'japanese', 'western']
+        };
         
-        console.log('개발용 계정 생성 성공 (목업)');
+        // Firebase 인증을 사용한 실제 회원가입
+        const user = await signup('test1@example.com', 'test1', userData);
+        console.log('개발용 계정 생성 성공:', user.email);
         
-        // 계정 생성 후 바로 로그인하여 메인 페이지로 이동
+        // 계정 생성 후 바로 메인 페이지로 이동
         router.push('/home');
         
       } catch (error) {
         console.error('개발용 계정 생성 실패:', error);
-        loginErrors.value.general = '계정 생성에 실패했습니다.';
+        if (error.code === 'auth/email-already-in-use') {
+          loginErrors.value.general = '개발용 계정이 이미 존재합니다. "개발용 계정으로 로그인" 버튼을 클릭하세요.';
+        } else {
+          loginErrors.value.general = error.message || '계정 생성에 실패했습니다.';
+        }
       } finally {
         loading.value = false;
       }
     };
     
-    // 개발용 로그인 (목업)
+    // 개발용 로그인
     const devLogin = async () => {
       loading.value = true;
       clearErrors();
@@ -559,16 +568,15 @@ export default {
         loginData.value.email = 'test1@example.com';
         loginData.value.password = 'test1';
         
-        // 목업 로그인 처리
-        await new Promise(resolve => setTimeout(resolve, 1000)); // 로딩 시뮬레이션
-        
-        console.log('개발용 로그인 성공 (목업)');
+        // Firebase 인증을 사용한 실제 로그인
+        const user = await login(loginData.value.email, loginData.value.password);
+        console.log('개발용 로그인 성공:', user.email);
         
         // 로그인 성공 후 메인 페이지로 이동
         router.push('/home');
       } catch (error) {
         console.error('개발용 로그인 실패:', error);
-        loginErrors.value.general = '로그인에 실패했습니다.';
+        loginErrors.value.general = '개발용 계정이 없습니다. 먼저 "개발용 계정 생성" 버튼을 클릭하세요.';
       } finally {
         loading.value = false;
       }
@@ -580,29 +588,33 @@ export default {
       clearErrors();
       
       try {
-        // 목업 로그인 처리
-        await new Promise(resolve => setTimeout(resolve, 1000)); // 로딩 시뮬레이션
+        console.log('로그인 시도:', loginData.value.email);
         
-        // 간단한 유효성 검사
-        if (loginData.value.email !== 'test1@example.com' || loginData.value.password !== 'test1') {
-          throw new Error('Invalid credentials');
-        }
-        
-        console.log('로그인 성공 (목업)');
+        // Firebase 인증을 사용한 실제 로그인
+        const user = await login(loginData.value.email, loginData.value.password);
+        console.log('로그인 성공:', user.email);
         
         // 메인 페이지로 이동
         router.push('/home');
         
       } catch (error) {
         console.error('로그인 실패:', error);
+        console.error('에러 코드:', error.code);
+        console.error('에러 메시지:', error.message);
         
-        // 에러 메시지 설정
-        if (loginData.value.email !== 'test1@example.com') {
+        // Firebase 에러 메시지 처리
+        if (error.code === 'auth/user-not-found') {
           loginErrors.value.email = '등록되지 않은 이메일입니다.';
-        } else if (loginData.value.password !== 'test1') {
+        } else if (error.code === 'auth/wrong-password') {
           loginErrors.value.password = '비밀번호가 일치하지 않습니다.';
+        } else if (error.code === 'auth/invalid-email') {
+          loginErrors.value.email = '올바른 이메일 형식이 아닙니다.';
+        } else if (error.code === 'auth/too-many-requests') {
+          loginErrors.value.general = '너무 많은 시도로 인해 일시적으로 차단되었습니다. 잠시 후 다시 시도해주세요.';
+        } else if (error.code === 'auth/network-request-failed') {
+          loginErrors.value.general = '네트워크 연결을 확인해주세요.';
         } else {
-          loginErrors.value.general = '로그인에 실패했습니다.';
+          loginErrors.value.general = error.message || '로그인에 실패했습니다.';
         }
       } finally {
         loading.value = false;
@@ -614,17 +626,31 @@ export default {
       loading.value = true;
       
       try {
-        // 목업 회원가입 처리
-        await new Promise(resolve => setTimeout(resolve, 1500)); // 로딩 시뮬레이션
+        // Firebase 인증을 사용한 실제 회원가입
+        const userData = {
+          name: signupData.value.name,
+          preferences: signupData.value.preferences
+        };
         
-        console.log('회원가입 성공 (목업):', signupData.value.email);
+        const user = await signup(signupData.value.email, signupData.value.password, userData);
+        console.log('회원가입 성공:', user.email);
         
         // 메인 페이지로 이동
         router.push('/home');
         
       } catch (error) {
         console.error('회원가입 실패:', error);
-        alert('회원가입에 실패했습니다. 다시 시도해주세요.');
+        
+        // Firebase 에러 메시지 처리
+        if (error.code === 'auth/email-already-in-use') {
+          signupErrors.value.email = '이미 사용 중인 이메일입니다.';
+        } else if (error.code === 'auth/invalid-email') {
+          signupErrors.value.email = '올바른 이메일 형식이 아닙니다.';
+        } else if (error.code === 'auth/weak-password') {
+          signupErrors.value.password = '비밀번호가 너무 약합니다. 6자 이상 입력해주세요.';
+        } else {
+          alert(error.message || '회원가입에 실패했습니다. 다시 시도해주세요.');
+        }
       } finally {
         loading.value = false;
       }
