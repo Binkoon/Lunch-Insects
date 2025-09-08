@@ -1,112 +1,188 @@
-# 식충이 캘린더 (Lunch-Insects)
+# 🍽️ 식충이 캘린더 v2.0 (Lunch-Insects)
 
-Vue.js와 Firebase를 활용한 **스마트한 점심 관리 플랫폼**!  
-팀원들과 함께하는 점심 식사 계획 및 추천 시스템입니다.
+Vue3 + Firebase 기반의 **스마트한 점심 관리 플랫폼**!  
+팀원들과 함께하는 점심 식사 계획, 음식점 추천, 그리고 소비 분석까지 한 번에!
 
----
-
-## 프로젝트 개요
-
-이 프로젝트는 팀원들이 점심을 어디서 먹을지 계획하고,  
-**Firebase**를 활용해 그룹 관리, 멤버 상태 추적, 음식점 추천을 제공합니다.  
-또한, **월별 소비 분석**을 통해 개인 및 그룹의 식비 관리를 도와줍니다.
+[![Vue.js](https://img.shields.io/badge/Vue.js-3.x-4FC08D?style=flat-square&logo=vue.js)](https://vuejs.org/)
+[![Firebase](https://img.shields.io/badge/Firebase-9+-FFCA28?style=flat-square&logo=firebase)](https://firebase.google.com/)
+[![Vite](https://img.shields.io/badge/Vite-Latest-646CFF?style=flat-square&logo=vite)](https://vitejs.dev/)
 
 ---
 
-## 주요 기능
+## ✨ 주요 기능
 
-- **그룹 캘린더**: 멤버별 일정 상태 (식사, 휴가, 약속) 관리
-- **음식점 추천**: 근처 맛집 검색 및 거리/평점 기반 추천
-- **점심 제안 시스템**: 멤버들이 음식점을 제안하고 투표하는 기능
-- **소비 분석**: 식권포인트/현금 사용 내역 및 월별 그래프
-- **그룹 관리**: 초대 코드, 이메일 초대, 멤버 관리
-- **반응형 디자인**: 모바일/데스크톱 최적화
+### 📅 **월별 캘린더 & 상태 관리**
+- 멤버별 일정 상태 (가능/불가능/휴가/다른약속/혼밥/밥스킵) 실시간 관리
+- 직관적인 UI로 팀원들의 상태를 한눈에 파악
+- 날짜별 음식점 방문 기록 및 추천 시스템
+
+### 🏢 **그룹 관리 시스템**
+- 관리자 권한 기반 멤버 초대/제거 시스템
+- 이메일 초대 및 그룹 설정 관리
+- 실시간 멤버 상태 동기화
+
+### 📊 **소비 분석 & 차트**
+- Chart.js 기반 월별 소비 분석 (식권포인트/현금)
+- 개인 vs 그룹 소비 비교 차트
+- 음식점별 방문 횟수 통계
+
+### 🍽️ **음식점 관리**
+- Firebase 기반 음식점 데이터베이스
+- 검색 가능한 드롭다운으로 음식점 선택
+- 메뉴 및 방문 기록 관리
+
+### 🎨 **모던 UI/UX**
+- Glassmorphism 디자인
+- 완전 반응형 레이아웃 (모바일/태블릿/데스크톱)
+- 로딩 상태 및 에러 처리 최적화
 
 ---
 
-## 기술 스택
+## 🏗️ 기술 스택
 
-- **Frontend**: Vue.js 3, Vite, Vue Router
-- **Backend**: Firebase (Authentication, Firestore)
-- **UI/UX**: CSS3, Glassmorphism, 반응형 디자인
-- **애니메이션**: @vueuse/motion, GSAP
-- **개발 도구**: ESLint, Prettier
+### **Frontend**
+- **Vue.js 3** (Composition API)
+- **Vite** (번들러)
+- **Vue Router 4** (라우팅)
+- **Chart.js** (데이터 시각화)
+
+### **Backend & Database**
+- **Firebase Authentication** (사용자 인증)
+- **Cloud Firestore** (실시간 데이터베이스)
+- **Firebase Hosting** (배포)
+
+### **Development Tools**
+- **ESLint** (코드 품질)
+- **Modern CSS** (Flexbox, Grid, CSS Variables)
+- **컴포넌트 기반 아키텍처**
+- **Composables** (재사용 가능한 로직)
 
 ---
 
-## 실행 방법
+## 🚀 빠른 시작
 
-### 1. 프로젝트 클론 및 설치
+### 1. 프로젝트 설정
 ```bash
-git clone https://github.com/your-repo/lunch-insects.git
+# 저장소 클론
+git clone https://github.com/your-username/lunch-insects.git
 cd lunch-insects
+
+# 의존성 설치
 npm install
 ```
 
-### 2. 환경 변수 설정 (.env)
-```bash
+### 2. 환경 변수 설정
+`.env` 파일을 생성하고 Firebase 설정을 추가하세요:
+
+```env
 # Firebase 설정
-VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_API_KEY=your_api_key_here
 VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
 VITE_FIREBASE_PROJECT_ID=your_project_id
 VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
 VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
-
-# 개발용 계정 (선택사항)
-DEV_USER_EMAIL=test1@example.com
-DEV_USER_PASSWORD=test1
 ```
 
 ### 3. 개발 서버 실행
 ```bash
+# 개발 서버 시작
 npm run dev
 ```
 
-### 4. 빌드
+브라우저에서 `http://localhost:5173`에 접속하세요.
+
+### 4. 프로덕션 빌드
 ```bash
+# 프로덕션 빌드
 npm run build
+
+# 빌드 결과 미리보기
+npm run preview
 ```
 
 ---
 
-## 프로젝트 구조
+## 📁 프로젝트 구조
 
 ```
 src/
-├── pages/              # 페이지 컴포넌트
-│   ├── Intro.vue      # 랜딩 페이지
-│   ├── Auth.vue       # 로그인/회원가입
-│   ├── HomeNew.vue    # 메인 페이지
-│   ├── About.vue      # 소개 페이지
-│   └── Onboarding.vue # 온보딩 페이지
-├── components/         # Vue 컴포넌트
-│   ├── Common/        # 공통 컴포넌트
-│   ├── Features/      # 기능별 컴포넌트
-│   └── ui/           # UI 컴포넌트 (atoms, molecules)
-├── layouts/           # 레이아웃 컴포넌트
-├── services/          # 서비스 레이어 (Firebase 등)
-├── composables/       # Vue 3 Composition API 로직
-├── stores/           # 상태 관리 (Pinia 등)
-├── router/           # Vue Router 설정
-├── types/            # TypeScript 타입 정의
-├── utils/            # 유틸리티 함수
-├── styles/           # 전역 스타일
-└── assets/           # 정적 자산
+├── 📄 pages/                    # 페이지 컴포넌트
+│   ├── Intro.vue               # 랜딩 페이지
+│   ├── Auth.vue                # 로그인/회원가입
+│   ├── HomeNew.vue             # 메인 대시보드
+│   └── About.vue               # 프로젝트 소개
+├── 🧩 components/              # Vue 컴포넌트
+│   ├── Common/                 # 공통 컴포넌트 (Modal, TopNav)
+│   ├── Features/               # 기능별 컴포넌트
+│   │   ├── GroupCalendar.vue   # 그룹 캘린더
+│   │   ├── GroupManagement.vue # 그룹 관리
+│   │   ├── StatusModal.vue     # 상태 편집 모달
+│   │   └── ExpenseChart.vue    # 소비 분석 차트
+│   └── ui/                     # 재사용 UI 컴포넌트
+├── 🔧 composables/             # Composition API 로직
+│   ├── useAuth.js              # 인증 상태 관리
+│   ├── useFirebaseData.js      # Firebase 데이터 로직
+│   └── useModal.js             # 모달 상태 관리
+├── 🌐 services/                # 외부 서비스 연동
+│   ├── firebase.js             # Firebase 설정
+│   ├── firebaseAuth.js         # 인증 서비스
+│   └── firebaseDBv2.js         # Firestore 데이터베이스 서비스
+├── 🎯 router/                  # Vue Router 설정
+├── ⚙️ config/                  # 설정 파일
+├── 🎨 styles/                  # 전역 스타일
+└── 📦 assets/                  # 정적 자산
 ```
 
 ---
 
-## 개발 환경
+## 🔧 개발 환경 요구사항
 
 - **Node.js**: 18.x 이상
 - **npm**: 9.x 이상
-- **Firebase**: v9+ (Modular SDK)
+- **모던 브라우저**: Chrome, Firefox, Safari, Edge
 
 ---
 
-## 라이선스
+## 🏆 주요 특징
 
-MIT License
+### ⚡ **성능 최적화**
+- **코드 스플리팅**: 컴포넌트별 지연 로딩
+- **Firebase 최적화**: 실시간 데이터 동기화
+- **이미지 최적화**: 반응형 이미지 및 지연 로딩
+
+### 🛡️ **안정성 & 보안**
+- **방어적 프로그래밍**: Null safety 및 에러 핸들링
+- **Firebase Rules**: 데이터베이스 보안 규칙
+- **환경변수**: 민감한 정보 분리
+
+### 🎨 **사용자 경험**
+- **직관적 UI**: 사용자 친화적인 인터페이스
+- **반응형 디자인**: 모든 디바이스 지원
+- **로딩 상태**: 사용자 피드백 최적화
 
 ---
+
+## 🤝 기여하기
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 라이선스
+
+이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
+
+---
+
+## 👨‍💻 만든 사람
+
+**DT 4인방 팀** - 스마트한 점심 관리를 위한 혁신적인 솔루션
+
+---
+
+*⭐ 이 프로젝트가 도움이 되었다면 스타를 눌러주세요!*

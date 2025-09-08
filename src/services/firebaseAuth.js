@@ -25,7 +25,7 @@ export const login = async (email, password) => {
 
 // 개발환경 허용 이메일 목록
 const ALLOWED_EMAILS = [
-  'test1@example.com'
+  import.meta.env.VITE_DEV_USER_EMAIL || 'test@example.com'
 ];
 
 // 회원가입 함수 (개발환경 제한)
@@ -108,7 +108,9 @@ export const devAutoLogin = async () => {
   }
   
   try {
-    const user = await login('test1@example.com', 'test1');
+    const email = import.meta.env.VITE_DEV_USER_EMAIL || 'test@example.com';
+    const password = import.meta.env.VITE_DEV_USER_PASSWORD || 'testpassword';
+    const user = await login(email, password);
     console.log('🔧 개발용 자동 로그인 성공:', user.email);
     return user;
   } catch (error) {
