@@ -181,51 +181,10 @@
       </div>
 
       <!-- 소비금액 그래프 섹션 -->
-      <section class="expense-chart-section">
-        <div class="section-header">
-          <h2>📊 월별 소비금액 분석</h2>
-          <div class="chart-controls">
-            <button class="chart-btn" @click="refreshChart">
-              <i class="icon-refresh">↻</i>
-              새로고침
-            </button>
-            </div>
-          </div>
-          
-        <div class="chart-container">
-          <div class="chart-tabs">
-            <button 
-              :class="['chart-tab', { active: selectedChartType === 'personal' }]"
-              @click="selectChartType('personal')"
-            >
-              개인 소비
-            </button>
-            <button 
-              :class="['chart-tab', { active: selectedChartType === 'group' }]"
-              @click="selectChartType('group')"
-            >
-              그룹 소비
-            </button>
-          </div>
-          
-          <div class="chart-content">
-            <div class="chart-legend">
-              <div class="legend-item">
-                <div class="legend-color ticket"></div>
-                <span>식권포인트</span>
-              </div>
-              <div class="legend-item">
-                <div class="legend-color cash"></div>
-                <span>현금</span>
-            </div>
-          </div>
-          
-            <div class="chart-area">
-              <canvas ref="expenseChart" width="800" height="400"></canvas>
-            </div>
-          </div>
-        </div>
-      </section>
+      <ExpenseChart 
+        :monthlyExpenseData="monthlyExpenseData"
+        @refresh="loadMonthlyExpenseData"
+      />
     </main>
 
     <!-- 모달들 -->
@@ -470,21 +429,19 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
-import { Chart, registerables } from 'chart.js';
 // 코드 스플리팅을 위한 비동기 컴포넌트 등록
 const GroupCalendar = defineAsyncComponent(() => import('@/components/Features/GroupCalendar.vue'));
 const GroupManagement = defineAsyncComponent(() => import('@/components/Features/GroupManagement.vue'));
+const ExpenseChart = defineAsyncComponent(() => import('@/components/Features/ExpenseChart.vue'));
 import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups, getRestaurantByName } from '@/services/firebaseDBv2.js';
 import { getCurrentUser, logout, onAuthStateChange } from '@/services/firebaseAuth.js';
 import { DEFAULT_LOCATION, DEFAULT_USER, DEFAULT_GROUP } from '@/config/constants.js';
 
-// Chart.js 등록
-Chart.register(...registerables);
-
 export default {
   components: {
     GroupCalendar,
-    GroupManagement
+    GroupManagement,
+    ExpenseChart
   },
   setup() {
     // 상태 관리
@@ -955,8 +912,6 @@ export default {
     const selectedCategory = ref('all');
     
     // 그래프 관련
-    const selectedChartType = ref('personal');
-    const expenseChart = ref(null);
     const monthlyExpenseData = ref({
       personal: {
         ticketPoints: [0, 0, 0, 0, 0, 0],
@@ -1160,146 +1115,6 @@ export default {
       console.log('선택된 날짜:', date);
     };
     
-    // 그래프 관련 메서드들
-    const selectChartType = (type) => {
-      selectedChartType.value = type;
-      drawChart();
-    };
-    
-    const refreshChart = () => {
-      console.log('그래프 새로고침');
-      drawChart();
-    };
-    
-    const drawChart = () => {
-      if (!expenseChart.value) return;
-      
-      // 기존 차트 인스턴스 제거
-      if (window.chartInstance) {
-        window.chartInstance.destroy();
-      }
-      
-      const ctx = expenseChart.value.getContext('2d');
-      
-      if (selectedChartType.value === 'personal') {
-        // 개인 소비 - 꺾은선 그래프 (실제 데이터 사용)
-        const data = monthlyExpenseData.value.personal;
-        window.chartInstance = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: ['1월', '2월', '3월', '4월', '5월', '6월'],
-            datasets: [
-              {
-                label: '식권포인트',
-                data: data.ticketPoints,
-                borderColor: '#3b82f6',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.4,
-                fill: true
-              },
-              {
-                label: '현금',
-                data: data.cash,
-                borderColor: '#10b981',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                tension: 0.4,
-                fill: true
-              }
-            ]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              title: {
-                display: true,
-                text: '개인 소비 분석',
-                font: { size: 16, weight: 'bold' }
-              },
-              legend: {
-                position: 'top',
-                labels: { usePointStyle: true, padding: 20 }
-              }
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-                ticks: {
-                  callback: function(value) {
-                    return value.toLocaleString() + '원';
-                  }
-                }
-              }
-            }
-          }
-        });
-      } else {
-        // 그룹 소비 - 막대 그래프 (멤버 이름을 x축, 각 멤버별 합계 금액)
-        const groupData = monthlyExpenseData.value.group;
-        
-        if (groupData && Object.keys(groupData).length > 0) {
-          const memberNames = Object.keys(groupData);
-          
-          // 각 멤버별 6개월 합계 계산
-          const sumArray = (arr) => (arr || []).reduce((acc, v) => acc + (Number(v) || 0), 0);
-          const ticketTotals = memberNames.map(name => sumArray(groupData[name]?.ticketPoints));
-          const cashTotals = memberNames.map(name => sumArray(groupData[name]?.cash));
-          
-          window.chartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-              labels: memberNames,
-              datasets: [
-                {
-                  label: '식권포인트',
-                  data: ticketTotals,
-                  backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                  borderColor: '#3b82f6',
-                  borderWidth: 1,
-                  borderRadius: 4
-                },
-                {
-                  label: '현금',
-                  data: cashTotals,
-                  backgroundColor: 'rgba(16, 185, 129, 0.6)',
-                  borderColor: '#10b981',
-                  borderWidth: 1,
-                  borderRadius: 4
-                }
-              ]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                title: {
-                  display: true,
-                  text: '그룹 소비 분석',
-                  font: { size: 16, weight: 'bold' }
-                },
-                legend: {
-                  position: 'top',
-                  labels: { usePointStyle: true, padding: 15 }
-                }
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  ticks: {
-                    callback: function(value) {
-                      return value.toLocaleString() + '원';
-                    }
-                  }
-                },
-                x: {
-                  ticks: { maxRotation: 45, minRotation: 0 }
-                }
-              }
-            }
-          });
-        }
-      }
-    };
     
     // 인증 상태 감지
     const setupAuthListener = () => {
@@ -1313,9 +1128,6 @@ export default {
           await loadRestaurants();
           await loadStatsData();
           await loadMonthlyExpenseData();
-          setTimeout(() => {
-            drawChart();
-          }, 100);
         } else {
           console.log('사용자 로그아웃 상태 감지');
           // 로그아웃 상태로 설정
@@ -1346,9 +1158,6 @@ export default {
         await loadRestaurants();
         await loadStatsData();
         await loadMonthlyExpenseData();
-        setTimeout(() => {
-          drawChart();
-        }, 100);
       } else {
         console.log('초기 로드 - 인증되지 않은 사용자');
       }
@@ -1513,8 +1322,6 @@ export default {
       selectedRestaurantDetail,
       newEvent,
       filteredRestaurants,
-      selectedChartType,
-      expenseChart,
       monthlyExpenseData,
       selectedDateForProposal,
       openAddEventModal,
@@ -1533,9 +1340,6 @@ export default {
       selectRestaurantForLunch,
       selectForLunch,
       handleDateSelected,
-      selectChartType,
-      refreshChart,
-      drawChart,
       loadRestaurants,
       loadUserData,
       loadUserDataFromAuth,
@@ -2207,128 +2011,6 @@ export default {
   box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
 }
 
-/* 소비금액 그래프 섹션 */
-.expense-chart-section {
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 1.5rem;
-  padding: 2rem;
-  margin-top: 2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(10px);
-}
-
-.chart-controls {
-  display: flex;
-  gap: 1rem;
-}
-
-.chart-btn {
-  background: linear-gradient(135deg, #ff6b6b, #ffa726);
-  color: white;
-  border: none;
-  border-radius: 1rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
-}
-
-.chart-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
-}
-
-.chart-container {
-  margin-top: 2rem;
-}
-
-.chart-tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 2rem;
-}
-
-.chart-tab {
-  background: rgba(255, 255, 255, 0.8);
-  color: #6c757d;
-  border: 2px solid rgba(255, 107, 107, 0.2);
-  border-radius: 1rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.chart-tab:hover {
-  background: rgba(255, 107, 107, 0.1);
-  border-color: #ff6b6b;
-}
-
-.chart-tab.active {
-  background: linear-gradient(135deg, #ff6b6b, #ffa726);
-  color: white;
-  border-color: #ff6b6b;
-}
-
-.chart-content {
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 1rem;
-  padding: 2rem;
-  border: 1px solid rgba(255, 107, 107, 0.1);
-}
-
-.chart-legend {
-  display: flex;
-  gap: 2rem;
-  margin-bottom: 1.5rem;
-  justify-content: center;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #4a5568;
-}
-
-.legend-color {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-}
-
-.legend-color.ticket {
-  background-color: #ff6b6b;
-}
-
-.legend-color.cash {
-  background-color: #4ecdc4;
-}
-
-.chart-area {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 400px;
-  background: white;
-  border-radius: 0.75rem;
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
-}
-
-.chart-area canvas {
-  max-width: 100%;
-  height: auto;
-}
 
 /* 음식점 상세보기 모달 */
 .restaurant-detail-content {

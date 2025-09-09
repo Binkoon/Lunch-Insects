@@ -365,7 +365,8 @@ import {
   getUser,
   getAllRestaurants,
   addRestaurantVisit,
-  getRestaurantVisitCounts
+  getRestaurantVisitCounts,
+  saveVisitRecord
 } from '@/services/firebaseDBv2.js';
 import { getCurrentUser } from '@/services/firebaseAuth.js';
 
@@ -860,6 +861,29 @@ export default {
         
         if (success) {
           console.log('✅ 상태 저장 성공');
+          
+          // available 상태이고 음식점이 선택된 경우 방문 기록 저장
+          if (editingStatus.value === 'available' && mealDetails.value.restaurant) {
+            try {
+              const visitResult = await saveVisitRecord(
+                editingMember.value.id,
+                props.groupId,
+                mealDetails.value.restaurant,
+                editingDate.value,
+                mealDetails.value.participants || []
+              );
+              
+              if (visitResult.success) {
+                console.log('✅ 방문 기록 저장 성공:', mealDetails.value.restaurant);
+              } else {
+                console.warn('⚠️ 방문 기록 저장 실패:', visitResult.error);
+              }
+            } catch (visitError) {
+              console.error('방문 기록 저장 중 오류:', visitError);
+              // 방문 기록 저장 실패는 상태 저장을 취소하지 않음 (선택사항)
+            }
+          }
+          
           // 로컬 상태 새로고침
           await loadMemberStatuses();
           closeStatusModal();

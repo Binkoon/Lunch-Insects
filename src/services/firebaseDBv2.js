@@ -16,7 +16,8 @@ import {
   limit,
   serverTimestamp,
   Timestamp,
-  setDoc
+  setDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase.js';
 import { COLLECTIONS } from '../config/collections.js';
@@ -1227,6 +1228,116 @@ export const getRestaurantVisitHistory = async (groupId, restaurantName = null) 
     return { success: true, data: visits };
   } catch (error) {
     console.error('방문 기록 조회 실패:', error);
+    return { success: false, error };
+  }
+};
+
+// ==================== 방문 기록 관리 ====================
+
+/**
+ * 방문 기록 저장 (캘린더에서 음식점 선택 시 호출)
+ */
+export const saveVisitRecord = async (userId, groupId, restaurantName, visitDate, participants = []) => {
+  try {
+    const visitRecord = {
+      userId,
+      groupId,
+      restaurantName,
+      visitDate, // YYYY-MM-DD 형식
+      participants: participants || [],
+      createdAt: serverTimestamp(),
+      source: 'calendar' // 캘린더에서 저장된 기록임을 표시
+    };
+
+    const visitRef = await addDoc(collection(db, 'visit_records'), visitRecord);
+    console.log('방문 기록 저장 성공:', visitRef.id);
+    return { success: true, id: visitRef.id };
+  } catch (error) {
+    console.error('방문 기록 저장 실패:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * 월별 방문 기록 조회
+ */
+export const getMonthlyVisitRecords = async (groupId, year, month) => {
+  try {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+    
+    const q = query(
+      collection(db, 'visit_records'),
+      where('groupId', '==', groupId),
+      where('visitDate', '>=', startDate),
+      where('visitDate', '<=', endDate),
+      orderBy('visitDate', 'desc')
+    );
+
+    const querySnapshot = await getDocs(q);
+    const visits = [];
+
+    querySnapshot.forEach((doc) => {
+      visits.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    return { success: true, data: visits };
+  } catch (error) {
+    console.error('월별 방문 기록 조회 실패:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * 전체 방문 통계 조회 (ExpenseChart용)
+ */
+export const getVisitStatistics = async (groupId) => {
+  try {
+    const q = query(
+      collection(db, 'visit_records'),
+      where('groupId', '==', groupId),
+      orderBy('createdAt', 'desc')
+    );
+
+    const querySnapshot = await getDocs(q);
+    const visits = [];
+
+    querySnapshot.forEach((doc) => {
+      visits.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    // 월별 방문 횟수 계산
+    const currentDate = new Date();
+    const currentMonth = currentDate.getFullYear() + '-' + String(currentDate.getMonth() + 1).padStart(2, '0');
+    
+    const monthlyVisits = visits.filter(visit => 
+      visit.visitDate && visit.visitDate.startsWith(currentMonth)
+    ).length;
+
+    // 음식점별 방문 횟수 계산
+    const restaurantVisits = {};
+    visits.forEach(visit => {
+      const name = visit.restaurantName;
+      restaurantVisits[name] = (restaurantVisits[name] || 0) + 1;
+    });
+
+    return { 
+      success: true, 
+      data: {
+        totalVisits: visits.length,
+        monthlyVisits,
+        restaurantVisits,
+        allVisits: visits
+      }
+    };
+  } catch (error) {
+    console.error('방문 통계 조회 실패:', error);
     return { success: false, error };
   }
 };
