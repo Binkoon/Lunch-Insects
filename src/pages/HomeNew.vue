@@ -472,7 +472,7 @@ const GroupCalendar = defineAsyncComponent(() => import('@/components/Features/G
 const GroupManagement = defineAsyncComponent(() => import('@/components/Features/GroupManagement.vue'));
 const ExpenseChart = defineAsyncComponent(() => import('@/components/Features/ExpenseChart.vue'));
 const NaverMap = defineAsyncComponent(() => import('@/components/Features/NaverMap.vue'));
-import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups, getRestaurantByName, checkAndResetMonthlyExpenses, getGroupMembersMonthlyExpenses, updateUser } from '@/services/firebaseDBv2.js';
+import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getUser, getUserGroups, getRestaurantByName, checkAndResetMonthlyExpenses, getGroupMembersMonthlyExpenses, updateUser } from '@/services/firebaseDBv2.js';
 import { getCurrentUser, onAuthStateChange } from '@/services/firebaseAuth.js';
 import { DEFAULT_LOCATION, DEFAULT_USER, DEFAULT_GROUP } from '@/config/constants.js';
 
@@ -493,7 +493,7 @@ export default {
       loadUserData,
       loadUserDataFromAuth,
       loadMonthlyExpenses,
-      // updateLocation은 useUser에서 관리
+      updateLocation,
       updateUserInfo,
       logout,
       setupAuthListener
@@ -527,7 +527,7 @@ export default {
       expenseChart,
       loadMonthlyExpenseData,
       loadGroupMonthlyExpenseData,
-      // loadStatsData는 useStats에서 관리
+      loadStatsData: loadExpenseStatsData,
       refreshExpenseChart,
       refreshExpenseData
     } = useExpense();
@@ -595,7 +595,7 @@ export default {
     const {
       loading: statsLoading,
       nearbyStats,
-      // loadStatsData는 useStats에서 관리
+      loadStatsData,
       refreshStats,
       updateStats
     } = useStats();
@@ -942,7 +942,12 @@ export default {
       membersForCalendar,
       isGroupAdmin,
       currentLocation,
-      // nearbyStats는 useStats에서 관리
+      nearbyStats,
+      loadStatsData,
+      loadExpenseStatsData,
+      loadGroupData,
+      loadMonthlyExpenseData,
+      loadGroupMonthlyExpenseData,
       // 음식점 관련 (useRestaurant에서 가져온 것들)
       restaurants,
       filteredRestaurants,

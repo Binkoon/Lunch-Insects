@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { getAllUsers, getRestaurantsCount } from '@/services/firebaseDBv2.js';
+import { getAllUsers, getAllRestaurants } from '@/services/firebaseDBv2.js';
 
 /**
  * 통계 관련 비즈니스 로직을 관리하는 Composable
@@ -25,7 +25,7 @@ export const useStats = () => {
       const users = await getAllUsers();
       
       // 음식점 수 로드
-      const restaurants = await getRestaurantsCount(1000); // 충분히 큰 수로 제한
+      const restaurants = await getAllRestaurants(1000); // 충분히 큰 수로 제한
       
       // 통계 데이터 업데이트
       nearbyStats.value.activeUsers = users.length; // 전체 등록자 수
