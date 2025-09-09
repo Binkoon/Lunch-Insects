@@ -1,165 +1,156 @@
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 /**
- * 모달 상태 관리 Composable
- * 다양한 모달의 열기/닫기 상태를 관리합니다
+ * 모달 관련 비즈니스 로직을 관리하는 Composable
+ * 단일책임: 모달 상태 관리, 모달 데이터 처리
  */
-export function useModal() {
-  // 모달 상태들
-  const modals = ref({});
+export const useModal = () => {
+  // 상태
+  const showStatusModal = ref(false);
+  const modalData = ref({});
+  const editingStatus = ref('');
+  const mealDetails = ref({
+    restaurant: '',
+    vacationReason: '',
+    otherReason: ''
+  });
+  const dropdownOpen = ref(false);
 
-  /**
-   * 모달 열기
-   */
-  const openModal = (modalName, data = null) => {
-    modals.value[modalName] = {
-      isOpen: true,
-      data: data
+  // 상태 옵션
+  const statusOptions = [
+    { value: 'available', label: '밥 먹기', icon: '🍽️' },
+    { value: 'skip', label: '밥 스킵', icon: '⏭️' },
+    { value: 'vacation', label: '휴가', icon: '🏖️' },
+    { value: 'other', label: '기타', icon: '📝' }
+  ];
+
+  // 모달에서 사용할 필터링된 음식점 목록
+  const modalFilteredRestaurants = computed(() => {
+    if (!modalData.value.restaurants || !mealDetails.value.restaurant) {
+      return modalData.value.restaurants || [];
+    }
+    return modalData.value.restaurants.filter(restaurant => 
+      restaurant.toLowerCase().includes(mealDetails.value.restaurant.toLowerCase())
+    );
+  });
+
+  // 모달 열기
+  const openStatusModal = (data) => {
+    modalData.value = data;
+    editingStatus.value = data.currentStatus;
+    showStatusModal.value = true;
+    
+    // 상태에 따른 초기 데이터 설정
+    if (data.currentStatus === 'available' && data.details?.restaurant) {
+      mealDetails.value = {
+        restaurant: data.details.restaurant,
+        vacationReason: '',
+        otherReason: ''
+      };
+    } else if (data.currentStatus === 'vacation' && data.details?.vacationReason) {
+      mealDetails.value = {
+        restaurant: '',
+        vacationReason: data.details.vacationReason,
+        otherReason: ''
+      };
+    } else if (data.currentStatus === 'other' && data.details?.otherReason) {
+      mealDetails.value = {
+        restaurant: '',
+        vacationReason: '',
+        otherReason: data.details.otherReason
+      };
+    } else {
+      mealDetails.value = { restaurant: '', vacationReason: '', otherReason: '' };
+    }
+  };
+
+  // 모달 닫기
+  const closeStatusModal = () => {
+    showStatusModal.value = false;
+    modalData.value = {};
+    editingStatus.value = '';
+    mealDetails.value = { restaurant: '', vacationReason: '', otherReason: '' };
+    dropdownOpen.value = false;
+  };
+
+  // 음식점 선택
+  const selectModalRestaurant = (restaurant) => {
+    mealDetails.value.restaurant = restaurant;
+    dropdownOpen.value = false;
+  };
+
+  // 드롭다운 토글
+  const toggleDropdown = () => {
+    dropdownOpen.value = !dropdownOpen.value;
+  };
+
+  // 드롭다운 외부 클릭 시 닫기
+  const closeDropdown = () => {
+    dropdownOpen.value = false;
+  };
+
+  // 상태 클래스 반환
+  const getMemberStatusClass = (date, memberId) => {
+    const memberStatus = modalData.value.memberStatuses?.[date]?.[memberId]?.status;
+    return {
+      'member-item': true,
+      'available': memberStatus === 'available',
+      'skip': memberStatus === 'skip',
+      'vacation': memberStatus === 'vacation',
+      'other': memberStatus === 'other'
     };
-    
-    // body 스크롤 방지
-    document.body.style.overflow = 'hidden';
-    
   };
 
-  /**
-   * 모달 닫기
-   */
-  const closeModal = (modalName) => {
-    if (modals.value[modalName]) {
-      modals.value[modalName] = {
-        isOpen: false,
-        data: null
+  // 상태 텍스트 반환
+  const getMemberStatusText = (date, memberId) => {
+    const memberStatus = modalData.value.memberStatuses?.[date]?.[memberId]?.status;
+    const statusTexts = {
+      'available': '밥 먹기',
+      'skip': '밥 스킵',
+      'vacation': '휴가',
+      'other': '기타'
+    };
+    return statusTexts[memberStatus] || '미정';
+  };
+
+  // 상태 상세 정보 반환
+  const getStatusDetails = () => {
+    if (editingStatus.value === 'available') {
+      return {
+        restaurant: mealDetails.value.restaurant
+      };
+    } else if (editingStatus.value === 'vacation') {
+      return {
+        vacationReason: mealDetails.value.vacationReason
+      };
+    } else if (editingStatus.value === 'other') {
+      return {
+        otherReason: mealDetails.value.otherReason
       };
     }
-    
-    // 열린 모달이 없으면 body 스크롤 복원
-    const hasOpenModal = Object.values(modals.value).some(modal => modal.isOpen);
-    if (!hasOpenModal) {
-      document.body.style.overflow = '';
-    }
-    
-  };
-
-  /**
-   * 모든 모달 닫기
-   */
-  const closeAllModals = () => {
-    Object.keys(modals.value).forEach(modalName => {
-      modals.value[modalName] = {
-        isOpen: false,
-        data: null
-      };
-    });
-    
-    // body 스크롤 복원
-    document.body.style.overflow = '';
-    
-  };
-
-  /**
-   * 모달 상태 확인
-   */
-  const isModalOpen = (modalName) => {
-    return modals.value[modalName]?.isOpen || false;
-  };
-
-  /**
-   * 모달 데이터 가져오기
-   */
-  const getModalData = (modalName) => {
-    return modals.value[modalName]?.data || null;
-  };
-
-  /**
-   * 특정 모달 상태 가져오기
-   */
-  const getModal = (modalName) => {
-    return modals.value[modalName] || { isOpen: false, data: null };
-  };
-
-  /**
-   * ESC 키로 모달 닫기 (선택사항)
-   */
-  const handleEscapeKey = (event) => {
-    if (event.key === 'Escape') {
-      // 가장 최근에 열린 모달 찾기
-      const openModalNames = Object.keys(modals.value).filter(name => 
-        modals.value[name]?.isOpen
-      );
-      
-      if (openModalNames.length > 0) {
-        const lastOpenModal = openModalNames[openModalNames.length - 1];
-        closeModal(lastOpenModal);
-      }
-    }
-  };
-
-  /**
-   * 키보드 이벤트 리스너 등록/해제
-   */
-  const enableEscapeKey = () => {
-    document.addEventListener('keydown', handleEscapeKey);
-  };
-
-  const disableEscapeKey = () => {
-    document.removeEventListener('keydown', handleEscapeKey);
+    return {};
   };
 
   return {
     // 상태
-    modals,
+    showStatusModal,
+    modalData,
+    editingStatus,
+    mealDetails,
+    dropdownOpen,
+    statusOptions,
+    
+    // 계산된 속성
+    modalFilteredRestaurants,
     
     // 메서드
-    openModal,
-    closeModal,
-    closeAllModals,
-    isModalOpen,
-    getModalData,
-    getModal,
-    enableEscapeKey,
-    disableEscapeKey
+    openStatusModal,
+    closeStatusModal,
+    selectModalRestaurant,
+    toggleDropdown,
+    closeDropdown,
+    getMemberStatusClass,
+    getMemberStatusText,
+    getStatusDetails
   };
-}
-
-/**
- * 특정 모달을 위한 전용 Composable
- * 단일 모달의 상태와 데이터를 관리합니다
- */
-export function useSingleModal(modalName) {
-  const { 
-    openModal: open, 
-    closeModal: close, 
-    isModalOpen, 
-    getModalData,
-    getModal 
-  } = useModal();
-
-  const openSingleModal = (data = null) => {
-    open(modalName, data);
-  };
-
-  const closeSingleModal = () => {
-    close(modalName);
-  };
-
-  const isOpen = () => {
-    return isModalOpen(modalName);
-  };
-
-  const getData = () => {
-    return getModalData(modalName);
-  };
-
-  const getState = () => {
-    return getModal(modalName);
-  };
-
-  return {
-    open: openSingleModal,
-    close: closeSingleModal,
-    isOpen,
-    getData,
-    getState
-  };
-}
+};

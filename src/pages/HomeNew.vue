@@ -459,13 +459,21 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
 import { gsap } from 'gsap';
+import { useRestaurant } from '@/composables/useRestaurant';
+import { useUser } from '@/composables/useUser';
+import { useExpense } from '@/composables/useExpense';
+import { useGroup } from '@/composables/useGroup';
+import { useModal } from '@/composables/useModal';
+import { useLocation } from '@/composables/useLocation';
+import { useStatus } from '@/composables/useStatus';
+import { useStats } from '@/composables/useStats';
 // 코드 스플리팅을 위한 비동기 컴포넌트 등록
 const GroupCalendar = defineAsyncComponent(() => import('@/components/Features/GroupCalendar.vue'));
 const GroupManagement = defineAsyncComponent(() => import('@/components/Features/GroupManagement.vue'));
 const ExpenseChart = defineAsyncComponent(() => import('@/components/Features/ExpenseChart.vue'));
 const NaverMap = defineAsyncComponent(() => import('@/components/Features/NaverMap.vue'));
 import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups, getRestaurantByName, checkAndResetMonthlyExpenses, getGroupMembersMonthlyExpenses, updateUser } from '@/services/firebaseDBv2.js';
-import { getCurrentUser, logout, onAuthStateChange } from '@/services/firebaseAuth.js';
+import { getCurrentUser, onAuthStateChange } from '@/services/firebaseAuth.js';
 import { DEFAULT_LOCATION, DEFAULT_USER, DEFAULT_GROUP } from '@/config/constants.js';
 
 export default {
@@ -476,49 +484,128 @@ export default {
     NaverMap
   },
   setup() {
+    // 사용자 관련 로직 (Composable 사용)
+    const {
+      currentUser,
+      loading: userLoading,
+      userExpenses,
+      currentLocation,
+      loadUserData,
+      loadUserDataFromAuth,
+      loadMonthlyExpenses,
+      // updateLocation은 useUser에서 관리
+      updateUserInfo,
+      logout,
+      setupAuthListener
+    } = useUser();
+
+    // 음식점 관련 로직 (Composable 사용)
+    const {
+      restaurants,
+      loading: restaurantLoading,
+      selectedCategory,
+      searchQuery,
+      selectedRestaurantDetail,
+      showRestaurantModal,
+      foodCategories,
+      filteredRestaurants,
+      loadRestaurants,
+      viewDetails,
+      selectCategory,
+      searchRestaurants,
+      selectRestaurant,
+      closeRestaurantModal,
+      getCategoryName,
+      getRestaurantEmoji
+    } = useRestaurant();
+
+    // 지출 관련 로직 (Composable 사용)
+    const {
+      loading: expenseLoading,
+      monthlyExpenseData,
+      statsData,
+      expenseChart,
+      loadMonthlyExpenseData,
+      loadGroupMonthlyExpenseData,
+      // loadStatsData는 useStats에서 관리
+      refreshExpenseChart,
+      refreshExpenseData
+    } = useExpense();
+
+    // 그룹 관련 로직 (Composable 사용)
+    const {
+      loading: groupLoading,
+      currentGroup,
+      showGroupModal,
+      groupMembers,
+      groupMembersList,
+      isGroupAdmin,
+      loadGroupData,
+      openGroupManagement,
+      closeGroupModal,
+      handleGroupUpdated,
+      addProposal,
+      updateMemberStatus,
+      getGroupStats,
+      checkCurrentGroupExpenses
+    } = useGroup();
+
+    // 모달 관련 로직 (Composable 사용)
+    const {
+      showStatusModal,
+      modalData,
+      editingStatus,
+      mealDetails,
+      dropdownOpen,
+      statusOptions,
+      modalFilteredRestaurants,
+      openStatusModal,
+      closeStatusModal,
+      selectModalRestaurant,
+      toggleDropdown,
+      closeDropdown,
+      getMemberStatusClass,
+      getMemberStatusText,
+      getStatusDetails
+    } = useModal();
+
+    // 위치 관련 로직 (Composable 사용)
+    const {
+      currentLocation: locationInfo,
+      distanceInfo,
+      loading: locationLoading,
+      getCurrentLocation,
+      openNaverMap,
+      openKakaoMap,
+      onDistanceCalculated,
+      // updateLocation은 useUser에서 관리
+    } = useLocation();
+
+    // 상태 관리 로직 (Composable 사용)
+    const {
+      loading: statusLoading,
+      selectedDateForProposal,
+      handleStatusUpdated,
+      handleDateSelected,
+      setSelectedDateForProposal,
+      clearSelectedDateForProposal
+    } = useStatus();
+
+    // 통계 관련 로직 (Composable 사용)
+    const {
+      loading: statsLoading,
+      nearbyStats,
+      // loadStatsData는 useStats에서 관리
+      refreshStats,
+      updateStats
+    } = useStats();
+
     // 상태 관리
     const loading = ref(false);
-    const currentUser = ref({
-      id: '',
-      name: '',
-      email: '',
-      avatar: null,
-      expenses: {
-        ticketPoints: 0,
-        cash: 0
-      },
-      location: {
-        name: '',
-        address: '',
-        lat: null,
-        lng: null
-      }
-    });
 
-    // 모달 상태
-    const showStatusModal = ref(false);
-    const modalData = ref({});
-    const editingStatus = ref('');
-    const mealDetails = ref({
-      restaurant: ''
-    });
-    const vacationDetails = ref({
-      reason: ''
-    });
-    const otherDetails = ref({
-      description: ''
-    });
-    const dropdownOpen = ref(false);
+    // 모달 상태는 useModal에서 관리
     
-    // 모달용 필터링된 음식점 목록
-    const modalFilteredRestaurants = computed(() => {
-      if (!modalData.value.restaurants || !mealDetails.value.restaurant) {
-        return modalData.value.restaurants || [];
-      }
-      return modalData.value.restaurants.filter(restaurant => 
-        restaurant.toLowerCase().includes(mealDetails.value.restaurant.toLowerCase())
-      );
-    });
+    // 모달용 필터링된 음식점 목록은 useModal에서 관리
     
     // 드롭다운 핸들러 함수들
     const handleInputFocus = () => {
@@ -535,22 +622,12 @@ export default {
       }, 200);
     };
     
-    const closeDropdown = () => {
-      dropdownOpen.value = false;
-    };
+    // 모달 관련 함수들은 useModal에서 관리
     
-    const selectModalRestaurant = (restaurant) => {
-      mealDetails.value.restaurant = restaurant;
-      dropdownOpen.value = false;
-    };
-    
-    const currentGroup = ref(null);
+    // currentGroup은 useGroup에서 관리
     
     // 개인 지출 데이터 (사용자 데이터에서 가져옴)
-    const userExpenses = computed(() => currentUser.value.expenses || {
-      ticketPoints: 0,
-      cash: 0
-    });
+    // 사용자 지출 데이터는 useUser에서 관리
     
     // 캘린더용 멤버 데이터 정규화
     const membersForCalendar = computed(() => {
@@ -580,376 +657,24 @@ export default {
       });
     });
 
-    // 그룹장 여부 확인
-    const isGroupAdmin = computed(() => {
-      if (!currentUser.value?.id || !currentGroup.value) return false;
-      
-      // admin (단수) 필드 또는 admins (복수) 필드 중 하나라도 매치하면 관리자
-      return currentGroup.value.admin === currentUser.value.id ||
-             currentGroup.value.admins?.includes(currentUser.value.id);
-    });
+    // 그룹장 여부 확인은 useGroup에서 관리
     
-    // 현재 위치 정보 (사용자 데이터에서 가져옴)
-    const currentLocation = computed(() => {
-      const userLocation = currentUser.value.location;
-      if (userLocation && userLocation.lat && userLocation.lng) {
-        return {
-          name: userLocation.name || '현재 위치',
-          address: userLocation.address || `${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}`,
-          lat: userLocation.lat,
-          lng: userLocation.lng
-        };
-      }
-      return {
-        name: '한진빌딩',
-        address: '서울특별시 중구 남대문로 63',
-        lat: 37.5665,
-        lng: 126.9780
-      };
-    });
+    // 현재 위치 정보는 useUser에서 관리
     
-    // 플랫폼 통계 (Firebase 데이터 기반)
-    const nearbyStats = ref({
-      activeUsers: 0,
-      totalUsers: 0,
-      restaurants: 0,
-      groups: 0
-    });
+    // 플랫폼 통계는 useStats에서 관리
     
     // 음식점 관련 - Firebase에서 가져오기
-    const restaurants = ref([]);
-    
-    // 음식점 데이터 로드
-    const loadRestaurants = async () => {
-      try {
-        loading.value = true;
-        if (import.meta.env.DEV) {
-          console.log('음식점 데이터 로드 시작...');
-        }
-        
-        // 간단한 방법으로 모든 음식점 가져오기
-        const restaurantData = await getAllRestaurants(50);
-        restaurants.value = restaurantData;
-        if (import.meta.env.DEV) {
-          console.log('음식점 데이터 로드 완료:', restaurantData.length, '개');
-        }
-        
-        // 데이터 확인을 위한 로그
-        if (import.meta.env.DEV && restaurantData.length > 0) {
-          console.log('첫 번째 음식점:', restaurantData[0]);
-        }
-      } catch (error) {
-        console.error('음식점 데이터 로드 실패:', error);
-        restaurants.value = [];
-      } finally {
-        loading.value = false;
-      }
-    };
+    // 음식점 데이터는 useRestaurant에서 관리
 
-    // 인증된 사용자 데이터 로드 (onAuthStateChange에서 호출)
-    const loadUserDataFromAuth = async (authUser) => {
-      try {
-        console.log('인증된 사용자 데이터 로드 시작:', authUser.email);
-        console.log('사용자 UID:', authUser.uid);
-        
-        // Firestore에서 사용자 정보 가져오기 (UID로 직접 검색)
-        const userData = await getUser(authUser.uid);
-        console.log('Firestore 사용자 데이터:', userData);
-        
-        // 사용자 로그인 시 lastActiveAt 업데이트
-        if (userData) {
-          await updateUser(authUser.uid, {
-            lastActiveAt: new Date() // 현재 시간으로 업데이트
-          });
-        }
-        
-        if (userData) {
-          currentUser.value = {
-            id: userData.id,
-            name: userData.name || '사용자',
-            email: userData.email,
-            avatar: userData.avatar,
-            expenses: userData.expenses || {
-              ticketPoints: 0,
-              cash: 0
-            },
-            location: userData.location || {
-              name: '한진빌딩',
-              address: '서울특별시 중구 남대문로 63',
-              lat: 37.5665,
-              lng: 126.9780
-            }
-          };
-          console.log('Firestore 데이터로 사용자 설정 완료:', currentUser.value);
-        } else {
-          // Firestore에 사용자 데이터가 없는 경우 기본값 사용
-          currentUser.value = {
-            ...DEFAULT_USER,
-            id: authUser.uid,
-            name: authUser.displayName || DEFAULT_USER.name,
-            email: authUser.email,
-            avatar: authUser.photoURL
-          };
-          console.log('기본값으로 사용자 설정 완료:', currentUser.value);
-        }
-        console.log('사용자 데이터 로드 완료:', currentUser.value.name);
-        
-        // 이번달 지출액 로드
-        await loadMonthlyExpenses();
-      } catch (error) {
-        console.error('사용자 데이터 로드 실패:', error);
-        console.error('오류 상세:', error.message);
-        currentUser.value = null;
-      }
-    };
+    // 사용자 관련 함수들은 useUser에서 관리
 
-    // 사용자 데이터 로드 (기존 함수, 초기 로드용)
-    const loadUserData = async () => {
-      try {
-        const authUser = getCurrentUser();
-        console.log('현재 사용자:', authUser);
-        
-        if (authUser) {
-          console.log('Firebase 인증 사용자:', authUser.email);
-          await loadUserDataFromAuth(authUser);
-        } else {
-          console.log('로그인되지 않은 상태입니다.');
-          // 로그인하지 않은 경우 Auth 페이지로 리다이렉트
-          window.location.href = '/auth';
-          return;
-        }
-      } catch (error) {
-        console.error('사용자 데이터 로드 실패:', error);
-      }
-    };
+    // 월별 지출 데이터 로드는 useExpense에서 관리
 
-    // 이번달 지출액 로드 (실제 Firebase 데이터 사용)
-    const loadMonthlyExpenses = async () => {
-      try {
-        if (currentUser.value.id && currentUser.value.id !== 'guest') {
-          console.log('이번달 지출액 로드 시작...');
-          
-          // Firebase에서 실제 월별 지출 데이터 가져오기
-          const expenses = await getUserMonthlyExpenses(currentUser.value.id);
-          
-          if (expenses) {
-            currentUser.value.expenses = {
-              ticketPoints: expenses.ticketPoints || 0,
-              cash: expenses.cash || 0,
-              total: (expenses.ticketPoints || 0) + (expenses.cash || 0)
-            };
-          } else {
-            // 데이터가 없는 경우 기본값 설정
-            currentUser.value.expenses = {
-              ticketPoints: 0,
-              cash: 0,
-              total: 0
-            };
-          }
-          
-          console.log('이번달 지출액 로드 완료:', currentUser.value.expenses);
-        }
-      } catch (error) {
-        console.error('이번달 지출액 로드 실패:', error);
-        // 오류 시 기본값 설정
-        currentUser.value.expenses = {
-          ticketPoints: 0,
-          cash: 0,
-          total: 0
-        };
-      }
-    };
+    // 그룹 월별 지출 데이터 로드는 useExpense에서 관리
 
-    // 월별 지출 데이터 로드 (그래프용)
-    const loadMonthlyExpenseData = async () => {
-      try {
-        if (currentUser.value.id && currentUser.value.id !== 'guest') {
-          console.log('월별 지출 데이터 로드 시작...');
-          
-          // 최근 6개월 데이터 가져오기
-          const currentDate = new Date();
-          const months = [];
-          
-          for (let i = 5; i >= 0; i--) {
-            const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-            months.push(date);
-          }
-          
-          // 각 월별 데이터 수집
-          const monthlyData = await Promise.all(
-            months.map(async (month) => {
-              try {
-                const expenses = await getUserMonthlyExpenses(
-                  currentUser.value.id, 
-                  month.getFullYear(), 
-                  month.getMonth() + 1
-                );
-                return {
-                  month: month.getMonth(),
-                  ticketPoints: expenses?.ticketPoints || 0,
-                  cash: expenses?.cash || 0
-                };
-              } catch (error) {
-                console.error(`월별 데이터 로드 실패 (${month.getFullYear()}-${month.getMonth() + 1}):`, error);
-                return {
-                  month: month.getMonth(),
-                  ticketPoints: 0,
-                  cash: 0
-                };
-              }
-            })
-          );
-          
-          // 데이터 정리
-          monthlyExpenseData.value.personal = {
-            ticketPoints: monthlyData.map(d => d.ticketPoints),
-            cash: monthlyData.map(d => d.cash)
-          };
-          
-          // 그룹 멤버들의 월별 지출 데이터도 로드
-          if (currentGroup.value?.members && currentGroup.value.members.length > 0) {
-            await loadGroupMonthlyExpenseData();
-          }
-          
-          console.log('월별 지출 데이터 로드 완료:', monthlyExpenseData.value.personal);
-        }
-      } catch (error) {
-        console.error('월별 지출 데이터 로드 실패:', error);
-      }
-    };
+    // 통계 데이터 로드는 useExpense에서 관리
 
-    // 그룹 멤버들의 월별 지출 데이터 로드
-    const loadGroupMonthlyExpenseData = async () => {
-      try {
-        if (!currentGroup.value?.members || currentGroup.value.members.length === 0) {
-          monthlyExpenseData.value.group = {};
-          return;
-        }
-
-        console.log('그룹 월별 지출 데이터 로드 시작...');
-        
-        // 최근 6개월 데이터 가져오기
-        const currentDate = new Date();
-        const months = [];
-        
-        for (let i = 5; i >= 0; i--) {
-          const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-          months.push(date);
-        }
-
-        // 각 멤버별로 월별 데이터 수집
-        const groupData = {};
-        
-        for (const memberId of currentGroup.value.members) {
-          try {
-            // 멤버 정보 가져오기
-            const memberData = await getUser(memberId);
-            const memberName = memberData?.name || `사용자 ${memberId.slice(-4)}`;
-            
-            // 각 월별 데이터 수집
-            const monthlyData = await Promise.all(
-              months.map(async (month) => {
-                try {
-                  const expenses = await getUserMonthlyExpenses(
-                    memberId, 
-                    month.getFullYear(), 
-                    month.getMonth() + 1
-                  );
-                  return {
-                    month: month.getMonth(),
-                    ticketPoints: expenses?.ticketPoints || 0,
-                    cash: expenses?.cash || 0
-                  };
-                } catch (error) {
-                  console.error(`멤버 ${memberName} 월별 데이터 로드 실패 (${month.getFullYear()}-${month.getMonth() + 1}):`, error);
-                  return {
-                    month: month.getMonth(),
-                    ticketPoints: 0,
-                    cash: 0
-                  };
-                }
-              })
-            );
-            
-            groupData[memberName] = {
-              ticketPoints: monthlyData.map(d => d.ticketPoints),
-              cash: monthlyData.map(d => d.cash)
-            };
-          } catch (error) {
-            console.error(`멤버 ${memberId} 정보 로드 실패:`, error);
-            const memberName = `사용자 ${memberId.slice(-4)}`;
-            groupData[memberName] = {
-              ticketPoints: [0, 0, 0, 0, 0, 0],
-              cash: [0, 0, 0, 0, 0, 0]
-            };
-          }
-        }
-        
-        monthlyExpenseData.value.group = groupData;
-        console.log('그룹 월별 지출 데이터 로드 완료:', groupData);
-      } catch (error) {
-        console.error('그룹 월별 지출 데이터 로드 실패:', error);
-        monthlyExpenseData.value.group = {};
-      }
-    };
-
-    // 통계 데이터 로드
-    const loadStatsData = async () => {
-      try {
-        console.log('통계 데이터 로드 시작...');
-        
-        // 전체 사용자 수 로드
-        const users = await getAllUsers();
-        
-        // 음식점 수 로드
-        const restaurants = await getRestaurantsCount(1000); // 충분히 큰 수로 제한
-        
-        // 통계 데이터 업데이트
-        nearbyStats.value.activeUsers = users.length; // 전체 등록자 수
-        nearbyStats.value.totalUsers = users.length;
-        nearbyStats.value.restaurants = restaurants.length;
-        nearbyStats.value.groups = 1; // 현재 DT 4인방 그룹만 있음
-        
-        console.log('통계 데이터 로드 완료:', nearbyStats.value);
-      } catch (error) {
-        console.error('통계 데이터 로드 실패:', error);
-        // 오류 시 기본값 설정
-        nearbyStats.value.activeUsers = 0;
-        nearbyStats.value.totalUsers = 0;
-        nearbyStats.value.restaurants = 0;
-        nearbyStats.value.groups = 0;
-      }
-    };
-
-    // 💳 그룹 멤버별 현재 지출 상태 조회
-    const checkCurrentGroupExpenses = async (groupId) => {
-      try {
-        console.log('💰 그룹 멤버별 지출 현황 조회 중...');
-        const currentDate = new Date();
-        const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth() + 1;
-        
-        const groupExpenses = await getGroupMembersMonthlyExpenses(groupId, currentYear, currentMonth);
-        console.log('📊 그룹 멤버별 이번달 지출 현황:', groupExpenses);
-        
-        // 전체 멤버의 지출 합계 계산
-        let totalTicketPoints = 0;
-        let totalCash = 0;
-        
-        Object.values(groupExpenses).forEach(member => {
-          if (member.expenses) {
-            totalTicketPoints += member.expenses.ticketPoints || 0;
-            totalCash += member.expenses.cash || 0;
-          }
-        });
-        
-        console.log(`💡 그룹 전체 이번달 지출: 식권포인트 ${totalTicketPoints.toLocaleString()}P, 현금 ${totalCash.toLocaleString()}원`);
-        return groupExpenses;
-      } catch (error) {
-        console.error('그룹 지출 현황 조회 실패:', error);
-        return {};
-      }
-    };
+    // 그룹 멤버별 현재 지출 상태 조회는 useGroup에서 관리
 
     // 💰 월별 지출 초기화 체크
     const checkMonthlyExpenseReset = async (groupId) => {
@@ -976,41 +701,7 @@ export default {
     };
 
     // 그룹 데이터 로드
-    const loadGroupData = async () => {
-      try {
-        console.log('그룹 데이터 로드 시작...');
-        console.log('현재 사용자 ID:', currentUser.value?.id);
-        
-        if (!currentUser.value?.id) {
-          console.log('사용자 ID가 없어서 그룹 데이터를 로드할 수 없습니다.');
-          currentGroup.value = null;
-          return;
-        }
-        
-        // 사용자의 그룹 목록에서 첫 번째 그룹 가져오기
-        const userGroups = await getUserGroups(currentUser.value.id);
-        console.log('사용자 그룹 목록:', userGroups);
-        
-        if (userGroups && userGroups.length > 0) {
-          const group = userGroups[0]; // 첫 번째 그룹 사용
-          currentGroup.value = group;
-          console.log('그룹 데이터 로드 완료:', group.name, '멤버 수:', group.members?.length || 0);
-          
-          // 💰 월별 지출 초기화 체크 (매월 1일 자정)
-          await checkMonthlyExpenseReset(group.id);
-          
-          // 💳 현재 그룹 멤버별 지출 상태 확인
-          await checkCurrentGroupExpenses(group.id);
-        } else {
-          console.log('사용자가 속한 그룹이 없습니다.');
-          currentGroup.value = null;
-        }
-      } catch (error) {
-        console.error('그룹 데이터 로드 실패:', error);
-        console.error('오류 상세:', error.message);
-        currentGroup.value = null;
-      }
-    };
+    // 그룹 데이터 로드는 useGroup에서 관리
 
     // 로그아웃 핸들러
     const handleLogout = async () => {
@@ -1024,266 +715,45 @@ export default {
       }
     };
     
-    const selectedRestaurant = ref(null);
-    const searchQuery = ref('');
-    const selectedCategory = ref('all');
+    // selectedRestaurant, searchQuery, selectedCategory는 useRestaurant에서 관리
     
-    // 그래프 관련
-    const monthlyExpenseData = ref({
-      personal: {
-        ticketPoints: [0, 0, 0, 0, 0, 0],
-        cash: [0, 0, 0, 0, 0, 0]
-      },
-      group: {}
-    });
+    // 그래프 관련 데이터는 useExpense에서 관리
     
     // 제안 관련
-    const selectedDateForProposal = ref(null);
+    // selectedDateForProposal은 useStatus에서 관리
     
-    // 음식 카테고리 (실제 음식점 데이터 기반)
-    const foodCategories = ref([
-      { id: 'all', name: '전체', icon: '🍽' },
-      { id: 'korean', name: '한식', icon: '🍚' },
-      { id: 'japanese', name: '일식', icon: '🍣' },
-      { id: 'western', name: '양식', icon: '🍝' },
-      { id: 'chinese', name: '중식', icon: '🥢' },
-      { id: 'fastfood', name: '패스트푸드', icon: '🍔' }
-    ]);
-
-    // 카테고리 한글 변환 함수
-    const getCategoryName = (category) => {
-      const categoryMap = {
-        'korean': '한식',
-        'japanese': '일식',
-        'western': '양식',
-        'chinese': '중식',
-        'fastfood': '패스트푸드'
-      };
-      return categoryMap[category] || category;
-    };
-
-    // 음식점 이름에 따른 이모지 매핑
-    const getRestaurantEmoji = (restaurantName) => {
-      if (!restaurantName) return '🍽️';
-      
-      const name = restaurantName.toLowerCase();
-      
-      // 한식
-      if (name.includes('한식') || name.includes('김치') || name.includes('비빔밥') || 
-          name.includes('된장') || name.includes('찌개') || name.includes('국') ||
-          name.includes('신의주') || name.includes('태진옥') || name.includes('청진동') ||
-          name.includes('용호동') || name.includes('애성회관') || name.includes('강남면옥')) {
-        return '🍚';
-      }
-      
-      // 중식
-      if (name.includes('중식') || name.includes('짜장') || name.includes('짬뽕') || 
-          name.includes('탕수육') || name.includes('일품향')) {
-        return '🥢';
-      }
-      
-      // 일식
-      if (name.includes('일식') || name.includes('초밥') || name.includes('라멘') || 
-          name.includes('우동') || name.includes('돈까스') || name.includes('밀피유')) {
-        return '🍜';
-      }
-      
-      // 양식
-      if (name.includes('양식') || name.includes('스테이크') || name.includes('파스타') || 
-          name.includes('피자') || name.includes('리원') || name.includes('멘무샤')) {
-        return '🍝';
-      }
-      
-      // 패스트푸드
-      if (name.includes('맥도날드') || name.includes('맘스터치') || name.includes('kfc') || 
-          name.includes('bbq') || name.includes('버거') || name.includes('치킨') ||
-          name.includes('보노보스') || name.includes('콜리그')) {
-        return '🍔';
-      }
-      
-      // 카페/디저트
-      if (name.includes('카페') || name.includes('커피') || name.includes('모모카페') || 
-          name.includes('알로프트') || name.includes('스쿨푸드')) {
-        return '☕';
-      }
-      
-      // 고기/구이
-      if (name.includes('고기') || name.includes('구이') || name.includes('돈우가') || 
-          name.includes('박씨화로구이') || name.includes('족발') || name.includes('미쓰족발')) {
-        return '🥩';
-      }
-      
-      // 기타
-      return '🍽️';
-    };
+    // 음식점 관련 로직은 useRestaurant에서 관리
     
     // 모달 상태
-    const showGroupModal = ref(false);
-    const showRestaurantModal = ref(false);
-    const selectedRestaurantDetail = ref(null);
+    // showGroupModal은 useGroup에서 관리
+    // showRestaurantModal은 useRestaurant에서 관리
     
     // 계산된 속성
-    const filteredRestaurants = computed(() => {
-      let filtered = restaurants.value;
-      
-      // 검색어 필터
-      if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase();
-        filtered = filtered.filter(restaurant => 
-          restaurant.name.toLowerCase().includes(query) ||
-          restaurant.category.toLowerCase().includes(query)
-        );
-      }
-      
-      // 카테고리 필터
-      if (selectedCategory.value !== 'all') {
-        filtered = filtered.filter(restaurant => restaurant.category === selectedCategory.value);
-      }
-      
-      return filtered;
-    });
+    // filteredRestaurants는 useRestaurant에서 관리
     
     // 메서드들
     
-    const openGroupManagement = () => {
-      showGroupModal.value = true;
-    };
-    
-    const closeGroupModal = () => {
-      showGroupModal.value = false;
-    };
-    
-    const handleGroupUpdated = (group) => {
-      currentGroup.value = group;
-      console.log('그룹 업데이트됨:', group);
-    };
+    // 그룹 관련 함수들은 useGroup에서 관리
 
     
     const refreshRecommendations = async () => {
       console.log('음식점 새로고침');
-      await loadRestaurants();
+      await loadRestaurants(); // useRestaurant에서 가져온 함수
     };
     
-    const updateLocation = () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            currentLocation.value = {
-              name: '현재 위치',
-              address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-              lat,
-              lng
-            };
-          },
-          (error) => {
-            console.error('위치 정보를 가져올 수 없습니다:', error);
-            alert('위치 정보에 접근할 수 없습니다.');
-          }
-        );
-      } else {
-        alert('이 브라우저는 위치 정보를 지원하지 않습니다.');
-      }
-    };
+    // updateLocation은 useUser에서 관리
     
-    const searchRestaurants = () => {
-      console.log('음식점 검색:', searchQuery.value);
-    };
+    // 음식점 관련 메서드들은 useRestaurant에서 관리
     
-    const selectCategory = (categoryId) => {
-      selectedCategory.value = categoryId;
-    };
-    
-    const selectRestaurant = (restaurant) => {
-      selectedRestaurant.value = restaurant;
-    };
-    
-    const viewDetails = async (restaurant) => {
-      try {
-        // 레스토랑 이름으로 상세(특히 menus, id)를 우선 보강
-        const dbRestaurant = await getRestaurantByName(restaurant.name);
-        if (dbRestaurant) {
-          selectedRestaurantDetail.value = {
-            ...restaurant,
-            id: dbRestaurant.id,
-            menus: dbRestaurant.menus || dbRestaurant.menu || []
-          };
-        } else {
-          selectedRestaurantDetail.value = restaurant;
-        }
-      } catch (e) {
-        console.warn('레스토랑 상세 조회 실패, 전달값으로 표시:', e);
-        selectedRestaurantDetail.value = restaurant;
-      }
-      showRestaurantModal.value = true;
-    };
-    
-    const closeRestaurantModal = () => {
-      showRestaurantModal.value = false;
-      selectedRestaurantDetail.value = null;
-    };
+    // closeRestaurantModal은 useRestaurant에서 관리
 
     // 지도 관련 함수들
-    const openNaverMap = () => {
-      const restaurant = selectedRestaurantDetail.value;
-      if (restaurant?.address) {
-        const naverMapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(restaurant.address)}`;
-        window.open(naverMapUrl, '_blank');
-      } else if (restaurant?.name) {
-        const naverMapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(restaurant.name)}`;
-        window.open(naverMapUrl, '_blank');
-      } else {
-        alert('주소 정보가 없습니다.');
-      }
-    };
-
-    const openKakaoMap = () => {
-      const restaurant = selectedRestaurantDetail.value;
-      if (restaurant?.address) {
-        const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(restaurant.address)}`;
-        window.open(kakaoMapUrl, '_blank');
-      } else if (restaurant?.name) {
-        const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(restaurant.name)}`;
-        window.open(kakaoMapUrl, '_blank');
-      } else {
-        alert('주소 정보가 없습니다.');
-      }
-    };
+    // openNaverMap, openKakaoMap은 useLocation에서 관리
 
     // 거리 계산 결과 처리
-    const onDistanceCalculated = (distanceInfo) => {
-      console.log('거리 정보:', distanceInfo);
-      // 필요시 추가 처리 로직
-    };
+    // onDistanceCalculated는 useLocation에서 관리
 
-    // 현재 위치 가져오기
-    const getCurrentLocation = () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const lat = position.coords.latitude;
-            const lng = position.coords.longitude;
-            
-            // currentUser의 location 업데이트
-            if (currentUser.value) {
-              currentUser.value.location = {
-                ...currentUser.value.location,
-                lat: lat,
-                lng: lng,
-                name: '현재 위치',
-                address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-              };
-            }
-            console.log('현재 위치:', { lat, lng });
-          },
-          (error) => {
-            console.warn('위치 정보를 가져올 수 없습니다:', error);
-            // 기본값 유지
-          }
-        );
-      }
-    };
+    // getCurrentLocation은 useLocation에서 관리
     
     const selectRestaurantForLunch = (restaurant) => {
       console.log('음식점 선택:', restaurant);
@@ -1319,36 +789,10 @@ export default {
       console.log('점심 선택:', restaurant);
     };
     
-    const handleDateSelected = (date) => {
-      selectedDateForProposal.value = new Date(date);
-      console.log('선택된 날짜:', date);
-    };
+    // handleDateSelected는 useStatus에서 관리
     
     
-    // 인증 상태 감지
-    const setupAuthListener = () => {
-      const unsubscribe = onAuthStateChange(async (user) => {
-        console.log('인증 상태 변경 감지:', user ? user.email : '로그아웃');
-        if (user) {
-          console.log('사용자 로그인 상태 감지:', user.email);
-          // 사용자 데이터 로드
-          await loadUserDataFromAuth(user);
-          await loadGroupData();
-          await loadRestaurants();
-          await loadStatsData();
-          await loadMonthlyExpenseData();
-        } else {
-          console.log('사용자 로그아웃 상태 감지');
-          // 로그아웃 상태로 설정
-          currentUser.value = null;
-          currentGroup.value = null;
-          window.location.href = '/auth';
-        }
-      });
-      
-      // 컴포넌트 언마운트 시 리스너 정리
-      return unsubscribe;
-    };
+    // setupAuthListener는 useUser에서 관리
 
     // 인증 상태 리스너 정리를 위한 변수
     let authUnsubscribe = null;
@@ -1358,18 +802,28 @@ export default {
       // 현재 위치 가져오기
       getCurrentLocation();
       
-      // 인증 상태 감지 설정
-      authUnsubscribe = setupAuthListener();
+      // 인증 상태 감지 설정 (useUser에서 관리)
+      authUnsubscribe = setupAuthListener(async (user) => {
+        if (user) {
+          console.log('인증 상태 변경 감지 - 로그인:', user.email);
+          // 추가 로직 실행
+          await loadGroupData(user.uid);
+          await loadRestaurants();
+          await loadStatsData(user.uid, currentGroup.value?.id);
+          await loadMonthlyExpenseData(user.uid);
+        } else {
+          console.log('인증 상태 변경 감지 - 로그아웃');
+          // 로그아웃 시 추가 로직
+          currentGroup.value = null;
+          window.location.href = '/auth';
+        }
+      });
       
-      // 초기 로드 (인증 상태 감지가 처리함)
+      // 초기 로드 (setupAuthListener가 처리함)
       const authUser = getCurrentUser();
       if (authUser) {
         console.log('초기 로드 - 인증된 사용자:', authUser.email);
-        await loadUserDataFromAuth(authUser);
-        await loadGroupData();
-        await loadRestaurants();
-        await loadStatsData();
-        await loadMonthlyExpenseData();
+        // setupAuthListener가 자동으로 처리하므로 중복 호출 제거
       } else {
         console.log('초기 로드 - 인증되지 않은 사용자');
       }
@@ -1377,164 +831,20 @@ export default {
 
     // 컴포넌트 언마운트 시 리스너 정리
     // 모달 관련 함수들
-    const statusOptions = [
-      { value: '', label: '미정', icon: '❔' },
-      { value: 'available', label: '가능', icon: '✅' },
-      { value: 'vacation', label: '휴가(불가능)', icon: '🏖️' },
-      { value: 'other', label: '다른 약속(불가능)', icon: '📅' },
-      { value: 'solo', label: '혼밥 예정(불가능)', icon: '🍱' },
-      { value: 'skip', label: '밥 스킵(불가능)', icon: '⏭️' }
-    ];
+    // statusOptions는 useModal에서 관리
 
-    const openStatusModal = (data) => {
-      modalData.value = data;
-      editingStatus.value = data.currentStatus;
-      showStatusModal.value = true;
-      
-      // body 스크롤 방지
-      document.body.style.overflow = 'hidden';
-      
-      // 상태별 기존 데이터 로드
-      const existingStatus = data.memberStatuses[data.date]?.[data.member.id];
-      if (existingStatus) {
-        if (existingStatus.status === 'available') {
-          mealDetails.value = {
-            restaurant: existingStatus.details.restaurant || ''
-          };
-        } else if (existingStatus.status === 'vacation') {
-          vacationDetails.value = {
-            reason: existingStatus.details.reason || ''
-          };
-        } else if (existingStatus.status === 'other') {
-          otherDetails.value = {
-            description: existingStatus.details.description || ''
-          };
-        }
-      } else {
-        // 기본값으로 초기화
-        mealDetails.value = { restaurant: '' };
-        vacationDetails.value = { reason: '' };
-        otherDetails.value = { description: '' };
-      }
-      
-      showStatusModal.value = true;
-    };
+    // 모달 관련 함수들은 useModal에서 관리
 
-    const closeStatusModal = () => {
-      showStatusModal.value = false;
-      modalData.value = {};
-      editingStatus.value = '';
-      mealDetails.value = { restaurant: '' };
-      vacationDetails.value = { reason: '' };
-      otherDetails.value = { description: '' };
-      dropdownOpen.value = false;
-      
-      // body 스크롤 복원
-      document.body.style.overflow = '';
-    };
+    // saveStatus는 useModal에서 관리
 
-    const saveStatus = async () => {
-      try {
-        console.log('상태 저장 중...', {
-          member: modalData.value.member,
-          date: modalData.value.date,
-          status: editingStatus.value,
-          details: getStatusDetails()
-        });
+    // getStatusDetails는 useModal에서 관리
 
-        // Firebase에 상태 저장
-        const { saveMemberStatus } = await import('@/services/firebaseDBv2.js');
-        
-        await saveMemberStatus(
-          modalData.value.groupId,
-          modalData.value.member.id,
-          modalData.value.date,
-          editingStatus.value,
-          getStatusDetails()
-        );
-
-        console.log('✅ 상태 저장 완료');
-        
-        closeStatusModal();
-      } catch (error) {
-        console.error('❌ 상태 저장 실패:', error);
-        alert('상태 저장에 실패했습니다. 다시 시도해주세요.');
-      }
-    };
-
-    const getStatusDetails = () => {
-      if (editingStatus.value === 'available') {
-        return {
-          restaurant: mealDetails.value.restaurant
-        };
-      } else if (editingStatus.value === 'vacation') {
-        return {
-          reason: vacationDetails.value.reason
-        };
-      } else if (editingStatus.value === 'other') {
-        return {
-          description: otherDetails.value.description
-        };
-      }
-      return {};
-    };
-
-    const getMemberStatusClass = (date, memberId) => {
-      const memberStatus = modalData.value.memberStatuses?.[date]?.[memberId]?.status;
-      return {
-        'status-available': memberStatus === 'available',
-        'status-vacation': memberStatus === 'vacation',
-        'status-other': memberStatus === 'other',
-        'status-solo': memberStatus === 'solo',
-        'status-skip': memberStatus === 'skip'
-      };
-    };
-
-    const getMemberStatusText = (date, memberId) => {
-      const memberStatus = modalData.value.memberStatuses?.[date]?.[memberId]?.status;
-      const statusTexts = {
-        'available': '가능',
-        'vacation': '휴가',
-        'other': '다른 약속',
-        'solo': '혼밥 예정',
-        'skip': '밥 스킵'
-      };
-      return statusTexts[memberStatus] || '미정';
-    };
+    // getMemberStatusClass, getMemberStatusText는 useModal에서 관리
 
     // 🆕 하이브리드 시스템: 상태 업데이트 핸들러  
-    const expenseChart = ref(null);
+    // expenseChart는 useExpense에서 관리
     
-    const handleStatusUpdated = async (updateInfo) => {
-      console.log('🔄 상태 업데이트됨:', updateInfo);
-      
-      try {
-        // ExpenseChart 실시간 갱신
-        if (expenseChart.value && expenseChart.value.refreshVisitStats) {
-          console.log('📊 ExpenseChart 통계 갱신 중...');
-          await expenseChart.value.refreshVisitStats();
-        }
-        
-        // 업데이트 타입별 처리
-        switch (updateInfo.type) {
-          case 'restaurant-selected':
-            console.log(`🟡 음식점 선택됨: ${updateInfo.restaurant} (pending)`);
-            break;
-          case 'restaurant-cancelled':
-            console.log(`❌ 음식점 취소됨: ${updateInfo.restaurant} (cancelled)`);
-            break;
-          default:
-            console.log('🔄 일반 상태 업데이트');
-        }
-        
-        // 월별 지출 데이터도 새로고침 (음식점 선택이 비용에 영향을 줄 수 있음)
-        await loadMonthlyExpenseData();
-        
-        console.log('✅ 실시간 업데이트 완료');
-      } catch (error) {
-        console.error('❌ 실시간 업데이트 실패:', error);
-      }
-    };
+    // handleStatusUpdated는 useStatus에서 관리
 
     // GSAP 애니메이션 초기화
     onMounted(() => {
@@ -1632,23 +942,33 @@ export default {
       membersForCalendar,
       isGroupAdmin,
       currentLocation,
-      nearbyStats,
+      // nearbyStats는 useStats에서 관리
+      // 음식점 관련 (useRestaurant에서 가져온 것들)
       restaurants,
-      selectedRestaurant,
-      searchQuery,
-      selectedCategory,
-      foodCategories,
-      showGroupModal,
-      showRestaurantModal,
-      selectedRestaurantDetail,
       filteredRestaurants,
+      selectedCategory,
+      searchQuery,
+      selectedRestaurantDetail,
+      showRestaurantModal,
+      foodCategories,
+      loadRestaurants,
+      selectCategory,
+      searchRestaurants,
+      selectRestaurant,
+      viewDetails,
+      closeRestaurantModal,
+      getCategoryName,
+      getRestaurantEmoji,
+      // selectedRestaurant는 useRestaurant에서 관리되지 않으므로 별도 추가
+      selectedRestaurant: ref(null),
+      showGroupModal,
       monthlyExpenseData,
       selectedDateForProposal,
       openGroupManagement,
       closeGroupModal,
       handleGroupUpdated,
       refreshRecommendations,
-      updateLocation,
+      // updateLocation은 useUser에서 관리
       searchRestaurants,
       selectCategory,
       selectRestaurant,
@@ -1661,31 +981,16 @@ export default {
       selectRestaurantForLunch,
       selectForLunch,
       handleDateSelected,
-      loadRestaurants,
-      loadUserData,
-      loadUserDataFromAuth,
-      loadGroupData,
-      loadMonthlyExpenses,
-      loadMonthlyExpenseData,
-      loadGroupMonthlyExpenseData,
-      loadStatsData,
+      // 음식점 관련 메서드는 useRestaurant에서 관리
+      // 사용자 관련 메서드는 useUser에서 관리
+      updateLocation,
+      updateUserInfo,
+      logout,
+      setupAuthListener,
+      // loadGroupData는 useGroup에서 관리
+      // loadMonthlyExpenseData, loadGroupMonthlyExpenseData, loadStatsData는 useExpense에서 관리
       handleLogout,
-      getCategoryName,
-      getRestaurantEmoji,
-      // 모달 관련
-      showStatusModal,
-      modalData,
-      editingStatus,
-      mealDetails,
-      vacationDetails,
-      otherDetails,
-      dropdownOpen,
-      statusOptions,
-      openStatusModal,
-      closeStatusModal,
-      saveStatus,
-      getMemberStatusClass,
-      getMemberStatusText,
+      // 모달 관련은 useModal에서 관리
       handleStatusUpdated,
       expenseChart,
       modalFilteredRestaurants,
