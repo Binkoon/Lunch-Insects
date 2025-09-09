@@ -363,7 +363,7 @@ export default {
               name: userData?.name || `사용자 ${memberId.slice(-4)}`,
               email: userData?.email || `user${memberId.slice(-4)}@example.com`,
               avatar: userData?.avatar || null,
-              lastActiveAt: userData?.lastActiveAt || new Date()
+              lastActiveAt: userData?.lastActiveAt || null
             };
           } catch (error) {
             console.error(`사용자 ${memberId} 정보 로드 실패:`, error);
@@ -373,7 +373,7 @@ export default {
               name: `사용자 ${memberId.slice(-4)}`,
               email: `user${memberId.slice(-4)}@example.com`,
               avatar: null,
-              lastActiveAt: new Date()
+              lastActiveAt: null
             };
           }
         });
@@ -404,31 +404,71 @@ export default {
 
     const formatDate = (date) => {
       if (!date) return '알 수 없음';
-      return new Date(date).toLocaleDateString('ko-KR');
+      
+      try {
+        // Firestore Timestamp 객체인 경우 .toDate() 메서드 사용
+        const dateObj = date.toDate ? date.toDate() : new Date(date);
+        return dateObj.toLocaleDateString('ko-KR');
+      } catch (error) {
+        console.warn('날짜 포맷 실패:', date, error);
+        return '알 수 없음';
+      }
     };
 
     const formatLastActive = (date) => {
-      if (!date) return '알 수 없음';
-      const now = new Date();
-      const lastActive = new Date(date);
-      const diffMs = now - lastActive;
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      if (!date) return '로그인 기록 없음';
       
-      if (diffDays === 0) return '오늘';
-      if (diffDays === 1) return '어제';
-      if (diffDays < 7) return `${diffDays}일 전`;
-      return formatDate(date);
+      try {
+        const now = new Date();
+        // Firestore Timestamp 객체인 경우 .toDate() 메서드 사용
+        const lastActive = date.toDate ? date.toDate() : new Date(date);
+        
+        // 유효한 날짜인지 확인
+        if (isNaN(lastActive.getTime())) {
+          return '로그인 기록 없음';
+        }
+        
+        const diffMs = now - lastActive;
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+        
+        if (diffMinutes < 1) return '방금 전';
+        if (diffMinutes < 60) return `${diffMinutes}분 전`;
+        if (diffHours < 24) return `${diffHours}시간 전`;
+        if (diffDays === 1) return '어제';
+        if (diffDays < 7) return `${diffDays}일 전`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
+        return formatDate(date);
+      } catch (error) {
+        console.warn('마지막 활동 시간 포맷 실패:', date, error);
+        return '로그인 기록 없음';
+      }
     };
 
     const getMemberStatus = (member) => {
-      const now = new Date();
-      const lastActive = new Date(member.lastActiveAt);
-      const diffMs = now - lastActive;
-      const diffHours = diffMs / (1000 * 60 * 60);
+      if (!member.lastActiveAt) return 'offline';
       
-      if (diffHours < 1) return 'online';
-      if (diffHours < 24) return 'away';
-      return 'offline';
+      try {
+        const now = new Date();
+        // Firestore Timestamp 객체인 경우 .toDate() 메서드 사용
+        const lastActive = member.lastActiveAt.toDate ? member.lastActiveAt.toDate() : new Date(member.lastActiveAt);
+        
+        // 유효한 날짜인지 확인
+        if (isNaN(lastActive.getTime())) {
+          return 'offline';
+        }
+        
+        const diffMs = now - lastActive;
+        const diffHours = diffMs / (1000 * 60 * 60);
+        
+        if (diffHours < 1) return 'online';
+        if (diffHours < 24) return 'away';
+        return 'offline';
+      } catch (error) {
+        console.warn('멤버 상태 확인 실패:', member.lastActiveAt, error);
+        return 'offline';
+      }
     };
 
     const isGroupAdmin = (memberId) => {

@@ -34,10 +34,10 @@ export default {
     gridStyle() {
       const gapMap = {
         none: '0',
-        sm: var(--rem-8),
-        md: var(--rem-16),
-        lg: var(--rem-24),
-        xl: var(--rem-32)
+        sm: 'var(--rem-8)',
+        md: 'var(--rem-16)',
+        lg: 'var(--rem-24)',
+        xl: 'var(--rem-32)'
       };
       
       const gridGap = gapMap[this.gap];

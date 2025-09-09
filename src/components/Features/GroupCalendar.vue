@@ -16,11 +16,6 @@
             </svg>
           </button>
         </div>
-        
-        <div class="view-options">
-          <button class="view-btn active">월</button>
-          <button class="view-btn">주</button>
-        </div>
       </div>
       
       <!-- 멤버 상태 범례 -->
@@ -76,8 +71,29 @@
           
           <!-- 평일인 경우에만 제안/확정 메뉴 표시 -->
           <div v-if="!day.isWeekendOrHoliday" class="day-content">
-            <!-- 확정된 메뉴 표시 -->
-            <div v-if="getConfirmedMealForDay(day.date)" class="confirmed-meal">
+            <!-- 선택된 음식점들 표시 -->
+            <div v-if="getSelectedRestaurantsForDay(day.date).length > 0" class="selected-restaurants">
+              <div 
+                v-for="restaurant in getSelectedRestaurantsForDay(day.date).slice(0, 2)" 
+                :key="restaurant.name"
+                class="selected-restaurant clickable"
+                @click.stop="openRestaurantDetailModal(restaurant, day.date)"
+                :title="`${restaurant.name} (${restaurant.count}명) - 클릭하여 상세보기`"
+              >
+                <span class="restaurant-icon">🍽️</span>
+                <span class="restaurant-name">{{ restaurant.name }}</span>
+                <span class="restaurant-count" v-if="restaurant.count > 1">{{ restaurant.count }}명</span>
+                <span class="restaurant-actions-hint">✏️</span>
+              </div>
+              <div v-if="getSelectedRestaurantsForDay(day.date).length > 2" class="more-restaurants clickable"
+                   @click.stop="openAllRestaurantsModal(day.date)"
+                   title="모든 선택된 음식점 보기">
+                +{{ getSelectedRestaurantsForDay(day.date).length - 2 }}
+              </div>
+            </div>
+            
+            <!-- 확정된 메뉴 표시 (기존 제안 시스템) -->
+            <div v-else-if="getConfirmedMealForDay(day.date)" class="confirmed-meal">
               <div class="meal-icon">🍽️</div>
               <div class="meal-name">{{ getConfirmedMealForDay(day.date) }}</div>
             </div>
@@ -208,17 +224,35 @@
                   <div class="member-details">
                     <span class="member-name">{{ member.name }}</span>
                     <span class="member-status">{{ getMemberStatusText(selectedDay, member.id) }}</span>
+                    <!-- 선택된 음식점 표시 -->
+                    <span v-if="getMemberRestaurant(selectedDay, member.id)" class="member-restaurant">
+                      🍽️ {{ getMemberRestaurant(selectedDay, member.id) }}
+                    </span>
                   </div>
                 </div>
-                <button 
-                  @click="editMemberStatus(member.id, selectedDay.date)"
-                  class="edit-status-btn"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                  </svg>
-                </button>
+                <div class="member-actions">
+                  <button 
+                    @click="editMemberStatus(member.id, selectedDay.date)"
+                    class="edit-status-btn"
+                    title="상태 수정"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                  </button>
+                  <button 
+                    v-if="getMemberStatus(selectedDay, member.id) !== ''"
+                    @click="cancelMemberStatus(member.id, selectedDay.date)"
+                    class="cancel-status-btn"
+                    title="상태 취소"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -350,6 +384,82 @@
         </div>
       </div>
     </div>
+
+    <!-- 음식점 상세 모달 -->
+    <div v-if="showRestaurantDetailModal" class="modal-overlay" @click="closeRestaurantDetailModal">
+      <div class="modal-content restaurant-detail-modal" @click.stop>
+        <div class="modal-header">
+          <h3>🍽️ {{ selectedRestaurantDetail?.name }}</h3>
+          <button @click="closeRestaurantDetailModal" class="close-btn">×</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="restaurant-detail-info">
+            <div class="detail-section">
+              <h4>📅 {{ formatSelectedDate(selectedRestaurantDate) }} 선택 현황</h4>
+              <div class="selected-members">
+                <div 
+                  v-for="member in getRestaurantMembers(selectedRestaurantDetail?.name, selectedRestaurantDate)" 
+                  :key="member.id"
+                  class="member-card"
+                >
+                  <div class="member-avatar" :style="{ backgroundColor: member.color }">
+                    {{ member.name.charAt(0) }}
+                  </div>
+                  <div class="member-info">
+                    <span class="member-name">{{ member.name }}</span>
+                    <span class="selection-time">{{ member.selectionTime }}</span>
+                  </div>
+                  <div class="member-actions">
+                    <button 
+                      v-if="canEditMember(member.id)"
+                      @click="editMemberFromModal(member.id)"
+                      class="edit-btn"
+                      title="수정"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      v-if="canEditMember(member.id)"
+                      @click="cancelMemberFromModal(member.id)"
+                      class="cancel-btn"
+                      title="취소"
+                    >
+                      ❌
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="detail-section">
+              <h4>📊 통계 정보</h4>
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <span class="stat-label">이번달 선택</span>
+                  <span class="stat-value">{{ restaurantStats.monthlyCount }}회</span>
+                </div>
+                <div class="stat-item">
+                  <span class="stat-label">총 방문</span>
+                  <span class="stat-value">{{ restaurantStats.totalCount }}회</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-footer">
+          <button @click="closeRestaurantDetailModal" class="btn-secondary">닫기</button>
+          <button 
+            v-if="!currentUserSelectedThisRestaurant(selectedRestaurantDetail?.name, selectedRestaurantDate)"
+            @click="selectThisRestaurant"
+            class="btn-primary"
+          >
+            나도 선택하기
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -366,7 +476,10 @@ import {
   getAllRestaurants,
   addRestaurantVisit,
   getRestaurantVisitCounts,
-  saveVisitRecord
+  saveVisitRecord,
+  cancelVisitRecord,
+  getMonthlyVisitRecords,
+  getVisitStatistics
 } from '@/services/firebaseDBv2.js';
 import { getCurrentUser } from '@/services/firebaseAuth.js';
 
@@ -459,6 +572,17 @@ export default {
       { immediate: true }
     );
     const selectedProposal = ref(null);
+    
+    // 음식점 상세 모달 관련
+    const showRestaurantDetailModal = ref(false);
+    const selectedRestaurantDetail = ref(null);
+    const selectedRestaurantDate = ref('');
+    
+    // Firebase 기반 통계 데이터 (reactive)
+    const restaurantStats = ref({
+      monthlyCount: 0,
+      totalCount: 0
+    });
     
     // 드래그 앤 드롭 관련
     const draggingProposal = ref(null);
@@ -694,6 +818,38 @@ export default {
       };
       return statusTexts[memberStatus] || '미정';
     };
+
+    // 멤버가 선택한 음식점 가져오기
+    const getMemberRestaurant = (day, memberId) => {
+      const memberStatus = memberStatuses.value[day.date]?.[memberId];
+      if (memberStatus?.status === 'available' && memberStatus?.details?.restaurant) {
+        return memberStatus.details.restaurant;
+      }
+      return null;
+    };
+
+    // 멤버 상태 가져오기 (상태 취소 버튼을 위해)
+    const getMemberStatus = (day, memberId) => {
+      return memberStatuses.value[day.date]?.[memberId]?.status || '';
+    };
+
+    // 날짜별 선택된 음식점들 가져오기 (캘린더 표시용)
+    const getSelectedRestaurantsForDay = (date) => {
+      const dayStatuses = memberStatuses.value[date] || {};
+      const restaurantCount = {};
+      
+      Object.values(dayStatuses).forEach(status => {
+        if (status.status === 'available' && status.details?.restaurant) {
+          const restaurant = status.details.restaurant;
+          restaurantCount[restaurant] = (restaurantCount[restaurant] || 0) + 1;
+        }
+      });
+      
+      return Object.entries(restaurantCount).map(([name, count]) => ({
+        name,
+        count
+      }));
+    };
     
     // 멤버 상태 가져오기 (Firebase에서 실제 데이터)
     const getMemberStatusFromData = (day, memberId) => {
@@ -886,6 +1042,15 @@ export default {
           
           // 로컬 상태 새로고침
           await loadMemberStatuses();
+          
+          // 부모 컴포넌트에 업데이트 알림 (ExpenseChart 갱신용)
+          emit('status-updated', {
+            type: 'restaurant-selected',
+            restaurant: mealDetails.value.restaurant,
+            date: editingDate.value,
+            userId: editingMember.value.id
+          });
+          
           closeStatusModal();
         } else {
           console.error('❌ 상태 저장 실패');
@@ -897,6 +1062,200 @@ export default {
       }
     };
     
+    // 멤버 상태 취소 (하이브리드 시스템)
+    const cancelMemberStatus = async (memberId, date) => {
+      try {
+        console.log('상태 취소 시도:', { memberId, date });
+        
+        // 1. 멤버 상태에서 음식점 정보 가져오기
+        const memberStatus = memberStatuses.value[date]?.[memberId];
+        const restaurantName = memberStatus?.details?.restaurant;
+        
+        // 2. 방문 기록 취소 (pending 상태인 경우만)
+        if (restaurantName) {
+          const visitCancelResult = await cancelVisitRecord(
+            memberId,
+            props.groupId,
+            restaurantName,
+            date
+          );
+          
+          if (visitCancelResult.success) {
+            console.log('🟡 방문 기록 취소 성공 (pending → cancelled)');
+          } else {
+            console.warn('⚠️ 방문 기록 취소 실패 또는 이미 확정됨:', visitCancelResult.error);
+          }
+        }
+        
+        // 3. 멤버 상태 삭제
+        const success = await deleteMemberStatus(memberId, date);
+        
+        if (success) {
+          console.log('✅ 상태 취소 성공');
+          // 로컬 상태 새로고침
+          await loadMemberStatuses();
+          
+          // 부모 컴포넌트에 취소 알림 (ExpenseChart 갱신용)
+          emit('status-updated', {
+            type: 'restaurant-cancelled',
+            restaurant: restaurantName,
+            date: date,
+            userId: memberId
+          });
+          
+          // 선택된 음식점 초기화
+          selectedRestaurant.value = null;
+        } else {
+          console.error('❌ 상태 취소 실패');
+          alert('상태 취소에 실패했습니다.');
+        }
+      } catch (error) {
+        console.error('상태 취소 실패:', error);
+        alert('상태 취소 중 오류가 발생했습니다.');
+      }
+    };
+
+    // 음식점 상세 모달 열기
+    const openRestaurantDetailModal = async (restaurant, date) => {
+      selectedRestaurantDetail.value = restaurant;
+      selectedRestaurantDate.value = date;
+      showRestaurantDetailModal.value = true;
+      
+      // Firebase에서 실시간 통계 로드
+      await loadRestaurantStats(restaurant.name);
+    };
+    
+    // 음식점 통계 로드
+    const loadRestaurantStats = async (restaurantName) => {
+      try {
+        console.log('🔄 음식점 통계 로드 중:', restaurantName);
+        
+        const [monthlyCount, totalCount] = await Promise.all([
+          getRestaurantMonthlyCount(restaurantName),
+          getRestaurantTotalCount(restaurantName)
+        ]);
+        
+        restaurantStats.value = {
+          monthlyCount,
+          totalCount
+        };
+        
+        console.log('✅ 음식점 통계 로드 완료:', restaurantStats.value);
+      } catch (error) {
+        console.error('❌ 음식점 통계 로드 실패:', error);
+        restaurantStats.value = {
+          monthlyCount: 0,
+          totalCount: 0
+        };
+      }
+    };
+
+    // 음식점 상세 모달 닫기  
+    const closeRestaurantDetailModal = () => {
+      showRestaurantDetailModal.value = false;
+      selectedRestaurantDetail.value = null;
+      selectedRestaurantDate.value = '';
+    };
+
+    // 모든 음식점 모달 열기 (3개 이상일 때)
+    const openAllRestaurantsModal = (date) => {
+      const restaurants = getSelectedRestaurantsForDay(date);
+      if (restaurants.length > 0) {
+        openRestaurantDetailModal(restaurants[0], date);
+      }
+    };
+
+    // 해당 음식점을 선택한 멤버들 가져오기
+    const getRestaurantMembers = (restaurantName, date) => {
+      const dayStatuses = memberStatuses.value[date] || {};
+      const members = [];
+      
+      Object.entries(dayStatuses).forEach(([memberId, status]) => {
+        if (status.status === 'available' && status.details?.restaurant === restaurantName) {
+          const member = actualMembers.value.find(m => m.id === memberId);
+          if (member) {
+            members.push({
+              ...member,
+              selectionTime: status.createdAt ? new Date(status.createdAt.seconds * 1000).toLocaleTimeString() : '시간 불명'
+            });
+          }
+        }
+      });
+      
+      return members;
+    };
+
+    // 멤버 편집 권한 확인 (본인만 수정/취소 가능)
+    const canEditMember = (memberId) => {
+      return currentUser.value?.uid === memberId || currentUser.value?.id === memberId;
+    };
+
+    // 현재 사용자가 해당 음식점을 선택했는지 확인
+    const currentUserSelectedThisRestaurant = (restaurantName, date) => {
+      const userStatus = memberStatuses.value[date]?.[currentUser.value?.uid || currentUser.value?.id];
+      return userStatus?.status === 'available' && userStatus?.details?.restaurant === restaurantName;
+    };
+
+    // 모달에서 멤버 편집
+    const editMemberFromModal = (memberId) => {
+      closeRestaurantDetailModal();
+      editMemberStatus(memberId, selectedRestaurantDate.value);
+    };
+
+    // 모달에서 멤버 상태 취소
+    const cancelMemberFromModal = async (memberId) => {
+      await cancelMemberStatus(memberId, selectedRestaurantDate.value);
+      closeRestaurantDetailModal();
+    };
+
+    // 이 음식점 선택하기
+    const selectThisRestaurant = () => {
+      closeRestaurantDetailModal();
+      selectDay(selectedRestaurantDate.value);
+      // 음식점이 이미 선택된 상태로 모달 열기
+      setTimeout(() => {
+        mealDetails.value.restaurant = selectedRestaurantDetail.value?.name || '';
+        editingStatus.value = 'available';
+        showStatusModal.value = true;
+      }, 100);
+    };
+
+    // Firebase 기반 음식점 월별 선택 횟수
+    const getRestaurantMonthlyCount = async (restaurantName) => {
+      try {
+        const currentDate = new Date();
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth() + 1;
+        
+        const result = await getMonthlyVisitRecords(props.groupId, year, month);
+        if (result.success) {
+          const monthlyVisits = result.data.filter(visit => 
+            visit.restaurantName === restaurantName && 
+            visit.status !== 'cancelled'
+          );
+          return monthlyVisits.length;
+        }
+        return 0;
+      } catch (error) {
+        console.error('월별 방문 횟수 조회 실패:', error);
+        return 0;
+      }
+    };
+
+    // Firebase 기반 음식점 총 방문 횟수
+    const getRestaurantTotalCount = async (restaurantName) => {
+      try {
+        const result = await getVisitStatistics(props.groupId, 'all');
+        if (result.success) {
+          return result.data.restaurantVisits[restaurantName] || 0;
+        }
+        return 0;
+      } catch (error) {
+        console.error('총 방문 횟수 조회 실패:', error);
+        return 0;
+      }
+    };
+
     // 메모 저장
     const saveMemo = () => {
       // 실제로는 API에 저장해야 함
@@ -1095,7 +1454,7 @@ export default {
       dragOverDay.value = null;
     };
     
-    // 애니메이션 함수들
+    // 🎨 부드러운 캐러셀 스타일 월 전환 애니메이션
     const animateCalendarTransition = async (direction = 'next') => {
       if (isAnimating.value) return;
       isAnimating.value = true;
@@ -1103,29 +1462,28 @@ export default {
       const daysContainer = document.querySelector('.days-container');
       if (!daysContainer) return;
       
-      const tl = gsap.timeline();
-      
-      // 현재 캘린더를 슬라이드 아웃
-      tl.to(daysContainer, {
-        x: direction === 'next' ? '-100%' : '100%',
-        opacity: 0.3,
-        duration: 0.3,
-        ease: 'power2.inOut'
+      // 부드러운 페이드 + 슬라이드 애니메이션
+      await gsap.to(daysContainer, {
+        x: direction === 'next' ? -30 : 30,
+        opacity: 0,
+        duration: 0.25,
+        ease: 'power2.out',
+        onComplete: () => {
+          // 데이터 업데이트 후 반대 방향에서 슬라이드 인
+          gsap.fromTo(daysContainer, {
+            x: direction === 'next' ? 30 : -30,
+            opacity: 0
+          }, {
+            x: 0,
+            opacity: 1,
+            duration: 0.25,
+            ease: 'power2.out',
+            onComplete: () => {
+              isAnimating.value = false;
+            }
+          });
+        }
       });
-      
-      // 새 캘린더를 슬라이드 인
-      tl.fromTo(daysContainer, {
-        x: direction === 'next' ? '100%' : '-100%',
-        opacity: 0.3
-      }, {
-        x: 0,
-        opacity: 1,
-        duration: 0.3,
-        ease: 'power2.inOut'
-      });
-      
-      await tl.play();
-      isAnimating.value = false;
     };
     
     const animateDaySelection = (dayElement) => {
@@ -1365,10 +1723,17 @@ export default {
       actualMembers,
       showProposalModal,
       selectedProposal,
+      showRestaurantDetailModal,
+      selectedRestaurantDetail,
+      selectedRestaurantDate,
+      restaurantStats,
       currentMonthText,
       calendarDays,
       getMemberStatusClass,
       getMemberStatusText,
+      getMemberRestaurant,
+      getMemberStatus,
+      getSelectedRestaurantsForDay,
       getEventIcon,
       formatSelectedDate,
       getDayOfWeek,
@@ -1390,6 +1755,19 @@ export default {
       selectDay,
       closeDetails,
       saveMemo,
+      cancelMemberStatus,
+      openRestaurantDetailModal,
+      closeRestaurantDetailModal,
+      openAllRestaurantsModal,
+      getRestaurantMembers,
+      canEditMember,
+      currentUserSelectedThisRestaurant,
+      editMemberFromModal,
+      cancelMemberFromModal,
+      selectThisRestaurant,
+      getRestaurantMonthlyCount,
+      getRestaurantTotalCount,
+      loadRestaurantStats,
       // 드래그 앤 드롭
       draggingProposal,
       dragOverDay,
@@ -1436,15 +1814,13 @@ export default {
 
 /* 헤더 스타일 */
 .header-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   margin-bottom: 1.5rem;
 }
 
 .month-navigation {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 1rem;
 }
 
@@ -1470,38 +1846,16 @@ export default {
 }
 
 .month-title {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 2rem;
+  font-weight: 800;
   color: #1e293b;
   margin: 0;
+  letter-spacing: -0.025em;
+  text-align: center;
+  min-width: 200px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
-.view-options {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.view-btn {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.view-btn.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-}
-
-.view-btn:hover:not(.active) {
-  background: #e2e8f0;
-}
 
 .member-legend {
   background: #f8fafc;
@@ -1548,6 +1902,7 @@ export default {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .weekdays-header {
@@ -2413,6 +2768,12 @@ export default {
   color: #64748b;
 }
 
+.member-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .edit-status-btn {
   background: #3b82f6;
   color: white;
@@ -2424,10 +2785,260 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
 }
 
 .edit-status-btn:hover {
   background: #2563eb;
+  transform: scale(1.1);
+}
+
+.cancel-status-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+}
+
+.cancel-status-btn:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+/* 선택된 음식점 표시 스타일 */
+.selected-restaurants {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.selected-restaurant {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.375rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: rgba(34, 197, 94, 0.1);
+  color: #059669;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  position: relative;
+}
+
+.selected-restaurant.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.selected-restaurant.clickable:hover {
+  background: rgba(34, 197, 94, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.restaurant-actions-hint {
+  opacity: 0;
+  font-size: 0.6rem;
+  transition: opacity 0.2s ease;
+  margin-left: auto;
+}
+
+.selected-restaurant.clickable:hover .restaurant-actions-hint {
+  opacity: 1;
+}
+
+.more-restaurants.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.more-restaurants.clickable:hover {
+  color: #374151;
+  transform: scale(1.1);
+}
+
+.restaurant-icon {
+  font-size: 0.6rem;
+}
+
+.restaurant-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.restaurant-count {
+  font-size: 0.6rem;
+  background: rgba(34, 197, 94, 0.2);
+  color: #065f46;
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+}
+
+.more-restaurants {
+  font-size: 0.6rem;
+  color: #6b7280;
+  text-align: center;
+  padding: 0.1rem;
+}
+
+.member-restaurant {
+  font-size: 0.7rem;
+  color: #059669;
+  background: rgba(34, 197, 94, 0.1);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.3rem;
+  margin-top: 0.2rem;
+  display: inline-block;
+}
+
+/* 음식점 상세 모달 스타일 */
+.restaurant-detail-modal {
+  max-width: 600px;
+  width: 100%;
+}
+
+.restaurant-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.detail-section {
+  background: #f8f9fa;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid #e9ecef;
+}
+
+.detail-section h4 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.selected-members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.member-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  transition: all 0.2s ease;
+}
+
+.member-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.member-card .member-avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+.member-card .member-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.member-card .member-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 1rem;
+}
+
+.selection-time {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.member-card .member-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.edit-btn, .cancel-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+}
+
+.edit-btn:hover {
+  background: rgba(59, 130, 246, 0.1);
+  transform: scale(1.1);
+}
+
+.cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  transform: scale(1.1);
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem;
+  background: white;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+}
+
+.stat-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #059669;
 }
 
 .memo-section h4 {

@@ -170,6 +170,10 @@ export default {
         },
         group: {}
       })
+    },
+    groupId: {
+      type: String,
+      default: 'default-group' // 기본값
     }
   },
   emits: ['refresh'],
@@ -211,13 +215,16 @@ export default {
       }
     };
 
+    // 🆕 하이브리드 시스템: 실시간 통계 갱신 메서드 (강화됨)
     const refreshVisitStats = async () => {
+      console.log('🔄 실시간 방문 통계 갱신 시작...');
       await loadVisitStats();
       if (selectedStatsType.value === 'category') {
         setTimeout(() => {
           drawCategoryChart();
         }, 100);
       }
+      console.log('✅ 실시간 방문 통계 갱신 완료');
     };
 
     const getCategoryName = (category) => {
@@ -277,14 +284,13 @@ export default {
       try {
         console.log('방문 통계 로드 시작...');
         
-        // TODO: 실제 그룹 ID를 props나 store에서 가져와야 함
-        // 현재는 방문 기록 시스템 테스트를 위해 임시 그룹 ID 사용
-        const groupId = 'default-group'; // 실제 구현 시 props나 store에서 가져와야 함
+        // props에서 그룹 ID 가져오기
+        const groupId = props.groupId;
         
         // 실제 방문 기록 데이터 가져오기
         const visitStatsResult = await getVisitStatistics(groupId);
         
-        if (visitStatsResult.success) {
+        if (visitStatsResult.success && visitStatsResult.data.totalVisits > 0) {
           const { totalVisits: realTotalVisits, monthlyVisits: realMonthlyVisits, restaurantVisits } = visitStatsResult.data;
           
           // 실제 방문 데이터로 설정
@@ -345,7 +351,7 @@ export default {
             .sort((a, b) => b.count - a.count);
             
         } else {
-          console.warn('⚠️ 방문 통계 조회 실패, 기존 방식으로 대체:', visitStatsResult.error);
+          console.warn('⚠️ 방문 기록이 없거나 조회 실패, 기존 방식으로 대체:', visitStatsResult.success ? '데이터 없음' : visitStatsResult.error);
           
           // 실패 시 기존 방식으로 대체 (restaurants 컬렉션의 visitCount 사용)
           const restaurants = await getAllRestaurants();

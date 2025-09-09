@@ -64,10 +64,6 @@
         <section class="calendar-section">
           <div class="section-header">
             <h2>📅 월별 캘린더</h2>
-            <button class="add-event-btn" @click="openAddEventModal">
-              <i class="icon-plus">+</i>
-                일정 추가
-              </button>
           </div>
           
           <GroupCalendar 
@@ -171,9 +167,6 @@
                 <button class="action-btn" @click.stop="viewDetails(restaurant)">
                   상세보기
                 </button>
-                <button class="action-btn primary" @click.stop="selectForLunch(restaurant)">
-                  선택
-            </button>
               </div>
             </div>
           </div>
@@ -182,44 +175,14 @@
 
       <!-- 소비금액 그래프 섹션 -->
       <ExpenseChart 
+        ref="expenseChart"
         :monthlyExpenseData="monthlyExpenseData"
+        :groupId="currentGroup?.id || 'default-group'"
         @refresh="loadMonthlyExpenseData"
       />
     </main>
 
     <!-- 모달들 -->
-    <div v-if="showAddEventModal" class="modal-overlay" @click="closeAddEventModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>일정 추가</h3>
-          <button class="close-btn" @click="closeAddEventModal">×</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="addEvent">
-            <div class="form-group">
-              <label>제목</label>
-              <input v-model="newEvent.title" type="text" placeholder="일정 제목을 입력하세요" required />
-            </div>
-            <div class="form-group">
-              <label>날짜</label>
-              <input v-model="newEvent.date" type="date" required />
-            </div>
-            <div class="form-group">
-              <label>시간</label>
-              <input v-model="newEvent.time" type="time" required />
-            </div>
-            <div class="form-group">
-              <label>설명</label>
-              <textarea v-model="newEvent.description" placeholder="일정에 대한 설명을 입력하세요" rows="3"></textarea>
-            </div>
-          </form>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="closeAddEventModal">취소</button>
-          <button class="btn-primary" @click="addEvent">추가</button>
-        </div>
-      </div>
-    </div>
 
     <!-- 그룹 관리 모달 -->
     <div v-if="showGroupModal" class="modal-overlay" @click="closeGroupModal">
@@ -240,54 +203,113 @@
 
     <!-- 음식점 상세보기 모달 -->
     <div v-if="showRestaurantModal" class="modal-overlay" @click="closeRestaurantModal">
-      <div class="modal-content restaurant-detail" @click.stop>
+      <div class="modal-content restaurant-detail-new" @click.stop>
         <div class="modal-header">
-          <h3>{{ selectedRestaurantDetail?.name }}</h3>
+          <h3>🍽️ {{ selectedRestaurantDetail?.name }}</h3>
           <button class="close-btn" @click="closeRestaurantModal">×</button>
         </div>
         <div class="modal-body">
-          <div v-if="selectedRestaurantDetail" class="restaurant-detail-content">
-            <!-- 음식점 기본 정보 -->
-            <div class="restaurant-info-section">
-              <div class="restaurant-image-large">
-                <img :src="selectedRestaurantDetail.image || '/api/placeholder/200/150'" :alt="selectedRestaurantDetail.name" />
-              </div>
-              <div class="restaurant-basic-info">
-                <div class="restaurant-category">{{ selectedRestaurantDetail.category }}</div>
-                <div class="restaurant-rating">⭐ {{ selectedRestaurantDetail.rating }}</div>
-                <div class="restaurant-distance">🚶 {{ selectedRestaurantDetail.distance }}분</div>
-              </div>
-            </div>
+          <div v-if="selectedRestaurantDetail" class="restaurant-detail-grid">
             
-            <!-- 메뉴판 -->
-            <div class="menu-section">
-              <h4>메뉴판</h4>
-              <div class="menu-list">
-                <div 
-                  v-for="menu in (selectedRestaurantDetail.menus || selectedRestaurantDetail.menu || [])" 
-                  :key="menu.id || menu.name"
-                  class="menu-item"
-                >
-                  <div class="menu-info">
-                    <span class="menu-name">{{ menu.name }}</span>
-                    <span class="menu-description">{{ menu.description }}</span>
+            <!-- 왼쪽: 기본 정보 & 메뉴 -->
+            <div class="restaurant-info-panel">
+              <!-- 기본 정보 -->
+              <div class="info-card">
+                <div class="restaurant-image-header">
+                  <img :src="selectedRestaurantDetail.image || '/api/placeholder/300/200'" :alt="selectedRestaurantDetail.name" />
+                  <div class="info-overlay">
+                    <div class="category-badge">{{ getCategoryName(selectedRestaurantDetail.category) }}</div>
+                    <div class="rating-info">
+                      <span class="rating">⭐ {{ selectedRestaurantDetail.rating }}</span>
+                      <span class="distance">🚶 {{ selectedRestaurantDetail.walkingTime }}분</span>
+                    </div>
                   </div>
-                  <span class="menu-price">{{ menu.price.toLocaleString() }}원</span>
+                </div>
+                
+                <div class="restaurant-meta">
+                  <h4>📍 위치 정보</h4>
+                  <p class="address">{{ selectedRestaurantDetail.address || '주소 정보 준비 중...' }}</p>
+                  <p class="phone">📞 {{ selectedRestaurantDetail.phone || '전화번호 준비 중...' }}</p>
+                  <p class="hours">🕐 {{ selectedRestaurantDetail.hours || '영업시간 정보 준비 중...' }}</p>
+                </div>
+              </div>
+              
+              <!-- 메뉴판 -->
+              <div class="menu-card">
+                <h4>📋 메뉴 & 가격</h4>
+                <div class="menu-grid">
+                  <div 
+                    v-for="menu in (selectedRestaurantDetail.menus || selectedRestaurantDetail.menu || [])" 
+                    :key="menu.id || menu.name"
+                    class="menu-item-new"
+                  >
+                    <div class="menu-content">
+                      <div class="menu-name">{{ menu.name }}</div>
+                      <div class="menu-description" v-if="menu.description">{{ menu.description }}</div>
+                    </div>
+                    <div class="menu-price">{{ (menu.price || 0).toLocaleString() }}원</div>
+                  </div>
+                  
+                  <!-- 메뉴가 없는 경우 -->
+                  <div v-if="!selectedRestaurantDetail.menus?.length && !selectedRestaurantDetail.menu?.length" class="no-menu">
+                    <p>🍽️ 메뉴 정보를 준비 중입니다.</p>
+                    <p class="sub-text">곧 실제 메뉴와 가격을 확인하실 수 있습니다!</p>
+                  </div>
                 </div>
               </div>
             </div>
             
-            <!-- 선택 버튼 -->
-            <div class="restaurant-actions">
-              <button class="btn-secondary" @click="closeRestaurantModal">닫기</button>
-              <button class="btn-primary" @click="selectRestaurantForLunch(selectedRestaurantDetail)">
-                이 음식점 선택하기
-              </button>
+            <!-- 오른쪽: 지도 -->
+            <div class="map-panel">
+              <div class="map-card">
+                <h4>🗺️ 위치</h4>
+                <div class="map-container" id="naverMap">
+                  <!-- 네이버 지도가 여기에 렌더링됩니다 -->
+                  <div class="map-placeholder">
+                    <div class="map-icon">🗺️</div>
+                    <p>네이버 지도 준비 중...</p>
+                    <p class="map-address">{{ selectedRestaurantDetail.address || '주소 정보 없음' }}</p>
+                  </div>
+                </div>
+                
+                <!-- 길찾기 버튼들 -->
+                <div class="direction-buttons">
+                  <button class="direction-btn" @click="openNaverMap">
+                    <span class="btn-icon">🧭</span>
+                    네이버 지도로 보기
+                  </button>
+                  <button class="direction-btn" @click="openKakaoMap">
+                    <span class="btn-icon">🚶</span>
+                    카카오맵 길찾기
+                  </button>
+                </div>
+              </div>
+              
+              <!-- 추가 정보 -->
+              <div class="additional-info">
+                <div class="info-item">
+                  <span class="label">🕐 영업시간</span>
+                  <span class="value">{{ selectedRestaurantDetail.hours || '정보 없음' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">💳 결제 방법</span>
+                  <span class="value">{{ selectedRestaurantDetail.payment || '카드, 현금 가능' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">🚗 주차</span>
+                  <span class="value">{{ selectedRestaurantDetail.parking || '정보 없음' }}</span>
+                </div>
+              </div>
             </div>
+            
           </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="closeRestaurantModal">닫기</button>
         </div>
       </div>
     </div>
+
 
     <!-- 멤버 상태 편집 모달 (전체 화면 오버레이) -->
     <Teleport to="body">
@@ -429,11 +451,12 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted, defineAsyncComponent } from 'vue';
+import { gsap } from 'gsap';
 // 코드 스플리팅을 위한 비동기 컴포넌트 등록
 const GroupCalendar = defineAsyncComponent(() => import('@/components/Features/GroupCalendar.vue'));
 const GroupManagement = defineAsyncComponent(() => import('@/components/Features/GroupManagement.vue'));
 const ExpenseChart = defineAsyncComponent(() => import('@/components/Features/ExpenseChart.vue'));
-import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups, getRestaurantByName } from '@/services/firebaseDBv2.js';
+import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups, getRestaurantByName, checkAndResetMonthlyExpenses, getGroupMembersMonthlyExpenses, updateUser } from '@/services/firebaseDBv2.js';
 import { getCurrentUser, logout, onAuthStateChange } from '@/services/firebaseAuth.js';
 import { DEFAULT_LOCATION, DEFAULT_USER, DEFAULT_GROUP } from '@/config/constants.js';
 
@@ -550,8 +573,11 @@ export default {
 
     // 그룹장 여부 확인
     const isGroupAdmin = computed(() => {
-      if (!currentUser.value?.id || !currentGroup.value?.admins) return false;
-      return currentGroup.value.admins.includes(currentUser.value.id);
+      if (!currentUser.value?.id || !currentGroup.value) return false;
+      
+      // admin (단수) 필드 또는 admins (복수) 필드 중 하나라도 매치하면 관리자
+      return currentGroup.value.admin === currentUser.value.id ||
+             currentGroup.value.admins?.includes(currentUser.value.id);
     });
     
     // 현재 위치 정보 (사용자 데이터에서 가져옴)
@@ -605,6 +631,13 @@ export default {
         // Firestore에서 사용자 정보 가져오기 (UID로 직접 검색)
         const userData = await getUser(authUser.uid);
         console.log('Firestore 사용자 데이터:', userData);
+        
+        // 사용자 로그인 시 lastActiveAt 업데이트
+        if (userData) {
+          await updateUser(authUser.uid, {
+            lastActiveAt: new Date() // 현재 시간으로 업데이트
+          });
+        }
         
         if (userData) {
           currentUser.value = {
@@ -864,6 +897,60 @@ export default {
       }
     };
 
+    // 💳 그룹 멤버별 현재 지출 상태 조회
+    const checkCurrentGroupExpenses = async (groupId) => {
+      try {
+        console.log('💰 그룹 멤버별 지출 현황 조회 중...');
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1;
+        
+        const groupExpenses = await getGroupMembersMonthlyExpenses(groupId, currentYear, currentMonth);
+        console.log('📊 그룹 멤버별 이번달 지출 현황:', groupExpenses);
+        
+        // 전체 멤버의 지출 합계 계산
+        let totalTicketPoints = 0;
+        let totalCash = 0;
+        
+        Object.values(groupExpenses).forEach(member => {
+          if (member.expenses) {
+            totalTicketPoints += member.expenses.ticketPoints || 0;
+            totalCash += member.expenses.cash || 0;
+          }
+        });
+        
+        console.log(`💡 그룹 전체 이번달 지출: 식권포인트 ${totalTicketPoints.toLocaleString()}P, 현금 ${totalCash.toLocaleString()}원`);
+        return groupExpenses;
+      } catch (error) {
+        console.error('그룹 지출 현황 조회 실패:', error);
+        return {};
+      }
+    };
+
+    // 💰 월별 지출 초기화 체크
+    const checkMonthlyExpenseReset = async (groupId) => {
+      try {
+        console.log('📅 월별 지출 초기화 체크 실행...');
+        const resetResult = await checkAndResetMonthlyExpenses(groupId);
+        
+        if (resetResult.success && resetResult.reset) {
+          console.log('✅ 월별 지출 초기화 완료:', resetResult.resetKey);
+          console.log('💳 이전 달 지출 기록:', resetResult.previousExpenses);
+          
+          // 초기화 완료 알림 (선택사항)
+          const currentDate = new Date();
+          const monthName = currentDate.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' });
+          console.log(`🎉 ${monthName} 새로운 달이 시작되었습니다! 모든 멤버의 지출이 초기화되었습니다.`);
+        } else if (resetResult.success && !resetResult.reset) {
+          console.log('📋 월별 지출 초기화:', resetResult.message);
+        } else {
+          console.error('❌ 월별 지출 초기화 실패:', resetResult.error);
+        }
+      } catch (error) {
+        console.error('월별 지출 초기화 체크 중 오류:', error);
+      }
+    };
+
     // 그룹 데이터 로드
     const loadGroupData = async () => {
       try {
@@ -884,6 +971,12 @@ export default {
           const group = userGroups[0]; // 첫 번째 그룹 사용
           currentGroup.value = group;
           console.log('그룹 데이터 로드 완료:', group.name, '멤버 수:', group.members?.length || 0);
+          
+          // 💰 월별 지출 초기화 체크 (매월 1일 자정)
+          await checkMonthlyExpenseReset(group.id);
+          
+          // 💳 현재 그룹 멤버별 지출 상태 확인
+          await checkCurrentGroupExpenses(group.id);
         } else {
           console.log('사용자가 속한 그룹이 없습니다.');
           currentGroup.value = null;
@@ -946,16 +1039,9 @@ export default {
     };
     
     // 모달 상태
-    const showAddEventModal = ref(false);
     const showGroupModal = ref(false);
     const showRestaurantModal = ref(false);
     const selectedRestaurantDetail = ref(null);
-    const newEvent = ref({
-      title: '',
-      date: '',
-      time: '12:00',
-      description: ''
-    });
     
     // 계산된 속성
     const filteredRestaurants = computed(() => {
@@ -979,24 +1065,6 @@ export default {
     });
     
     // 메서드들
-    const openAddEventModal = () => {
-      showAddEventModal.value = true;
-    };
-    
-    const closeAddEventModal = () => {
-      showAddEventModal.value = false;
-      newEvent.value = {
-        title: '',
-        date: '',
-        time: '12:00',
-        description: ''
-      };
-    };
-    
-    const addEvent = () => {
-      console.log('일정 추가:', newEvent.value);
-      closeAddEventModal();
-    };
     
     const openGroupManagement = () => {
       showGroupModal.value = true;
@@ -1010,6 +1078,7 @@ export default {
       currentGroup.value = group;
       console.log('그룹 업데이트됨:', group);
     };
+
     
     const refreshRecommendations = async () => {
       console.log('음식점 새로고침');
@@ -1074,6 +1143,33 @@ export default {
     const closeRestaurantModal = () => {
       showRestaurantModal.value = false;
       selectedRestaurantDetail.value = null;
+    };
+
+    // 지도 관련 함수들
+    const openNaverMap = () => {
+      const restaurant = selectedRestaurantDetail.value;
+      if (restaurant?.address) {
+        const naverMapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(restaurant.address)}`;
+        window.open(naverMapUrl, '_blank');
+      } else if (restaurant?.name) {
+        const naverMapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(restaurant.name)}`;
+        window.open(naverMapUrl, '_blank');
+      } else {
+        alert('주소 정보가 없습니다.');
+      }
+    };
+
+    const openKakaoMap = () => {
+      const restaurant = selectedRestaurantDetail.value;
+      if (restaurant?.address) {
+        const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(restaurant.address)}`;
+        window.open(kakaoMapUrl, '_blank');
+      } else if (restaurant?.name) {
+        const kakaoMapUrl = `https://map.kakao.com/link/search/${encodeURIComponent(restaurant.name)}`;
+        window.open(kakaoMapUrl, '_blank');
+      } else {
+        alert('주소 정보가 없습니다.');
+      }
     };
     
     const selectRestaurantForLunch = (restaurant) => {
@@ -1290,11 +1386,121 @@ export default {
       return statusTexts[memberStatus] || '미정';
     };
 
-    const handleStatusUpdated = () => {
-      console.log('상태 업데이트됨 - 캘린더 새로고침');
-      // 캘린더가 자동으로 새로고침되도록 트리거
-      // GroupCalendar 컴포넌트의 loadMemberStatuses가 호출됨
+    // 🆕 하이브리드 시스템: 상태 업데이트 핸들러  
+    const expenseChart = ref(null);
+    
+    const handleStatusUpdated = async (updateInfo) => {
+      console.log('🔄 상태 업데이트됨:', updateInfo);
+      
+      try {
+        // ExpenseChart 실시간 갱신
+        if (expenseChart.value && expenseChart.value.refreshVisitStats) {
+          console.log('📊 ExpenseChart 통계 갱신 중...');
+          await expenseChart.value.refreshVisitStats();
+        }
+        
+        // 업데이트 타입별 처리
+        switch (updateInfo.type) {
+          case 'restaurant-selected':
+            console.log(`🟡 음식점 선택됨: ${updateInfo.restaurant} (pending)`);
+            break;
+          case 'restaurant-cancelled':
+            console.log(`❌ 음식점 취소됨: ${updateInfo.restaurant} (cancelled)`);
+            break;
+          default:
+            console.log('🔄 일반 상태 업데이트');
+        }
+        
+        // 월별 지출 데이터도 새로고침 (음식점 선택이 비용에 영향을 줄 수 있음)
+        await loadMonthlyExpenseData();
+        
+        console.log('✅ 실시간 업데이트 완료');
+      } catch (error) {
+        console.error('❌ 실시간 업데이트 실패:', error);
+      }
     };
+
+    // GSAP 애니메이션 초기화
+    onMounted(() => {
+      // 헤더 애니메이션
+      gsap.fromTo('.app-header', 
+        { 
+          y: -100, 
+          opacity: 0 
+        }, 
+        { 
+          y: 0, 
+          opacity: 1, 
+          duration: 0.8, 
+          ease: "power2.out" 
+        }
+      );
+
+      // 헤더 요소들 순차 애니메이션
+      gsap.fromTo('.header-left h1', 
+        { 
+          x: -50, 
+          opacity: 0 
+        }, 
+        { 
+          x: 0, 
+          opacity: 1, 
+          duration: 0.6, 
+          delay: 0.3, 
+          ease: "power2.out" 
+        }
+      );
+
+      gsap.fromTo('.header-left p', 
+        { 
+          x: -30, 
+          opacity: 0 
+        }, 
+        { 
+          x: 0, 
+          opacity: 1, 
+          duration: 0.5, 
+          delay: 0.5, 
+          ease: "power2.out" 
+        }
+      );
+
+      // 오른쪽 헤더 요소들
+      gsap.fromTo('.expense-info, .user-info, .group-btn, .logout-btn', 
+        { 
+          x: 50, 
+          opacity: 0 
+        }, 
+        { 
+          x: 0, 
+          opacity: 1, 
+          duration: 0.6, 
+          delay: 0.7, 
+          stagger: 0.1,
+          ease: "power2.out" 
+        }
+      );
+
+      // 메인 컨텐츠 애니메이션
+      gsap.fromTo('.main-content', 
+        { 
+          y: 30, 
+          opacity: 0 
+        }, 
+        { 
+          y: 0, 
+          opacity: 1, 
+          duration: 0.8, 
+          delay: 0.5, 
+          ease: "power2.out" 
+        }
+      );
+
+      // 부드러운 호버 애니메이션 추가
+      gsap.set('.group-btn, .logout-btn', {
+        transformOrigin: 'center center'
+      });
+    });
 
     onUnmounted(() => {
       if (authUnsubscribe) {
@@ -1316,17 +1522,12 @@ export default {
       searchQuery,
       selectedCategory,
       foodCategories,
-      showAddEventModal,
       showGroupModal,
       showRestaurantModal,
       selectedRestaurantDetail,
-      newEvent,
       filteredRestaurants,
       monthlyExpenseData,
       selectedDateForProposal,
-      openAddEventModal,
-      closeAddEventModal,
-      addEvent,
       openGroupManagement,
       closeGroupModal,
       handleGroupUpdated,
@@ -1337,6 +1538,8 @@ export default {
       selectRestaurant,
       viewDetails,
       closeRestaurantModal,
+      openNaverMap,
+      openKakaoMap,
       selectRestaurantForLunch,
       selectForLunch,
       handleDateSelected,
@@ -1365,6 +1568,7 @@ export default {
       getMemberStatusClass,
       getMemberStatusText,
       handleStatusUpdated,
+      expenseChart,
       modalFilteredRestaurants,
       handleInputFocus,
       handleInputChange,
@@ -1386,11 +1590,13 @@ export default {
 
 /* 헤더 */
 .app-header {
-  background: linear-gradient(135deg, #ff6b6b, #ffa726);
-  color: white;
+  background: linear-gradient(135deg, #ffffff, #f8fafc);
+  color: #1e293b;
   padding: 2rem;
-  box-shadow: 0 8px 32px rgba(255, 107, 107, 0.3);
-  border-radius: 0 0 2rem 2rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  position: relative;
+  backdrop-filter: blur(10px);
 }
 
 .header-content {
@@ -1405,14 +1611,15 @@ export default {
   font-size: 2.5rem;
   font-weight: 700;
   margin: 0 0 0.5rem 0;
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .header-left p {
   font-size: 1.1rem;
-  opacity: 0.95;
   margin: 0;
   font-weight: 500;
+  color: #64748b;
 }
 
 .header-right {
@@ -1424,11 +1631,12 @@ export default {
 .expense-info {
   display: flex;
   gap: 1.5rem;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.8);
   padding: 1rem 1.5rem;
   border-radius: 1rem;
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
 }
 
 .expense-item {
@@ -1444,8 +1652,9 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.3);
+  background: #f1f5f9;
   border-radius: 50%;
+  border: 1px solid #e2e8f0;
 }
 
 .expense-details {
@@ -1456,13 +1665,13 @@ export default {
 
 .expense-label {
   font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.8);
+  color: #64748b;
   font-weight: 500;
 }
 
 .expense-amount {
   font-size: 1.1rem;
-  color: white;
+  color: #1e293b;
   font-weight: 700;
 }
 
@@ -1477,69 +1686,73 @@ export default {
   height: 3rem;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .default-avatar {
   width: 3rem;
   height: 3rem;
   border-radius: 50%;
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: #f1f5f9;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  color: rgba(255, 255, 255, 0.8);
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: #64748b;
+  border: 2px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .user-name {
   font-weight: 600;
   font-size: 1.1rem;
+  color: #1e293b;
 }
 
+
 .group-btn {
-  background: rgba(255, 255, 255, 0.25);
+  background: #3b82f6;
   color: white;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-radius: 1.5rem;
+  border: none;
+  border-radius: 0.75rem;
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
 }
 
 .group-btn:hover {
-  background: rgba(255, 255, 255, 0.35);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
 }
 
 .logout-btn {
-  background: rgba(239, 68, 68, 0.8);
+  background: #ef4444;
   color: white;
-  border: 2px solid rgba(239, 68, 68, 0.9);
-  border-radius: 1.5rem;
+  border: none;
+  border-radius: 0.75rem;
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
 }
 
 .logout-btn:hover {
-  background: rgba(239, 68, 68, 0.9);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(239, 68, 68, 0.3);
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
 }
 
 /* 메인 컨텐츠 */
@@ -1590,7 +1803,6 @@ export default {
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.add-event-btn,
 .refresh-btn {
   background: linear-gradient(135deg, #ff6b6b, #ffa726);
   color: white;
@@ -1607,7 +1819,6 @@ export default {
   box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
 }
 
-.add-event-btn:hover,
 .refresh-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
@@ -2613,5 +2824,396 @@ export default {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+/* 멤버 초대 모달 스타일 */
+.invite-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+}
+
+.form-hint {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.role-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.role-option {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.role-option:hover {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+
+.role-option input[type="radio"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: #22c55e;
+}
+
+.role-option input[type="radio"]:checked + .role-icon + .role-info {
+  color: #059669;
+}
+
+.role-icon {
+  font-size: 1.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  border-radius: 50%;
+}
+
+.role-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.role-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.role-desc {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* ===== 새로운 음식점 상세보기 모달 스타일 ===== */
+.restaurant-detail-new {
+  max-width: 1200px;
+  width: 95vw;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+.restaurant-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  height: 70vh;
+  overflow: hidden;
+}
+
+.restaurant-info-panel {
+  overflow-y: auto;
+  padding-right: 1rem;
+}
+
+.map-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 정보 카드 */
+.info-card, .menu-card, .map-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  margin-bottom: 1.5rem;
+}
+
+.restaurant-image-header {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.restaurant-image-header img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+}
+
+.info-overlay {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  right: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.category-badge {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 2rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.rating-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-end;
+}
+
+.rating, .distance {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.restaurant-meta h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.75rem;
+  border-bottom: 2px solid #f3f4f6;
+  padding-bottom: 0.5rem;
+}
+
+.restaurant-meta p {
+  margin: 0.5rem 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.address {
+  font-weight: 500;
+  color: #374151 !important;
+}
+
+/* 메뉴 카드 */
+.menu-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.menu-item-new {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.menu-item-new:hover {
+  background: #f3f4f6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.menu-content {
+  flex: 1;
+}
+
+.menu-name {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.menu-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.menu-price {
+  font-weight: 700;
+  color: #dc2626;
+  font-size: 1.125rem;
+  margin-left: 1rem;
+}
+
+.no-menu {
+  text-align: center;
+  padding: 2rem;
+  color: #6b7280;
+}
+
+.no-menu .sub-text {
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+/* 지도 카드 */
+.map-container {
+  height: 300px;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 1rem;
+}
+
+.map-placeholder {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #f9fafb;
+  color: #6b7280;
+}
+
+.map-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.map-address {
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* 길찾기 버튼들 */
+.direction-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.direction-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.direction-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.direction-btn:nth-child(2) {
+  background: #059669;
+}
+
+.direction-btn:nth-child(2):hover {
+  background: #047857;
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+}
+
+/* 추가 정보 */
+.additional-info {
+  background: #f9fafb;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.value {
+  color: #6b7280;
+  text-align: right;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .restaurant-detail-new {
+    width: 98vw;
+    height: 95vh;
+  }
+  
+  .restaurant-detail-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+    max-height: 80vh;
+  }
+  
+  .restaurant-info-panel {
+    padding-right: 0;
+  }
+  
+  .direction-buttons {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

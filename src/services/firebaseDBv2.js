@@ -488,6 +488,97 @@ export const addMenusToRestaurantByName = async (restaurantName, menus) => {
 // ==================== 사용자 지출 관리 ====================
 
 /**
+ * 그룹 내 모든 멤버의 이번달 지출 현황 조회
+ */
+export const getGroupMembersMonthlyExpenses = async (groupId, year, month) => {
+  try {
+    // 그룹 멤버 조회
+    const group = await getGroup(groupId);
+    if (!group || !group.members) {
+      return {};
+    }
+
+    const membersExpenses = {};
+    
+    // 각 멤버별로 지출 조회
+    for (const member of group.members) {
+      const expenses = await getUserMonthlyExpenses(member.id, year, month);
+      membersExpenses[member.id] = {
+        ...member,
+        expenses
+      };
+    }
+    
+    return membersExpenses;
+  } catch (error) {
+    console.error('그룹 멤버 월별 지출 조회 실패:', error);
+    return {};
+  }
+};
+
+/**
+ * 매월 자동 초기화 체크 및 실행
+ */
+export const checkAndResetMonthlyExpenses = async (groupId) => {
+  try {
+    console.log('📅 월별 지출 초기화 체크 시작...');
+    
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentDay = currentDate.getDate();
+    
+    // 매월 1일이 아니면 초기화하지 않음
+    if (currentDay !== 1) {
+      console.log('🔹 오늘은 월 초기화 날짜가 아닙니다.');
+      return { success: true, reset: false, message: '초기화 날짜가 아님' };
+    }
+    
+    // 그룹의 마지막 초기화 날짜 확인
+    const groupRef = doc(db, COLLECTIONS.GROUPS, groupId);
+    const groupDoc = await getDoc(groupRef);
+    
+    if (!groupDoc.exists()) {
+      throw new Error('그룹을 찾을 수 없습니다.');
+    }
+    
+    const groupData = groupDoc.data();
+    const lastResetKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+    
+    // 이미 이번 달에 초기화했는지 확인
+    if (groupData.lastExpenseReset === lastResetKey) {
+      console.log('✅ 이번 달 이미 초기화 완료');
+      return { success: true, reset: false, message: '이미 초기화됨' };
+    }
+    
+    // 그룹 멤버들의 지출 현황 조회
+    const membersExpenses = await getGroupMembersMonthlyExpenses(groupId, currentYear, currentMonth);
+    
+    console.log('💰 초기화 전 멤버별 지출 현황:', membersExpenses);
+    
+    // 그룹 문서에 초기화 기록 업데이트
+    await updateDoc(groupRef, {
+      lastExpenseReset: lastResetKey,
+      lastExpenseResetAt: serverTimestamp(),
+      previousMonthExpenses: membersExpenses // 이전 달 지출 기록 보관
+    });
+    
+    console.log('✅ 월별 지출 초기화 완료');
+    return { 
+      success: true, 
+      reset: true, 
+      resetKey: lastResetKey,
+      previousExpenses: membersExpenses,
+      message: '초기화 완료' 
+    };
+    
+  } catch (error) {
+    console.error('❌ 월별 지출 초기화 실패:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
  * 사용자의 이번달 지출 기록 조회
  */
 export const getUserMonthlyExpenses = async (userId, year, month) => {
@@ -1246,12 +1337,15 @@ export const saveVisitRecord = async (userId, groupId, restaurantName, visitDate
       visitDate, // YYYY-MM-DD 형식
       participants: participants || [],
       createdAt: serverTimestamp(),
-      source: 'calendar' // 캘린더에서 저장된 기록임을 표시
+      source: 'calendar', // 캘린더에서 저장된 기록임을 표시
+      status: 'pending', // 🆕 하이브리드 시스템: 임시 저장
+      confirmedAt: null, // 확정 시간
+      cancelledAt: null  // 취소 시간
     };
 
     const visitRef = await addDoc(collection(db, 'visit_records'), visitRecord);
-    console.log('방문 기록 저장 성공:', visitRef.id);
-    return { success: true, id: visitRef.id };
+    console.log('🟡 방문 기록 임시 저장 성공 (pending):', visitRef.id);
+    return { success: true, id: visitRef.id, status: 'pending' };
   } catch (error) {
     console.error('방문 기록 저장 실패:', error);
     return { success: false, error };
@@ -1266,12 +1360,13 @@ export const getMonthlyVisitRecords = async (groupId, year, month) => {
     const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
     const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
     
+    // 임시로 orderBy 제거 (인덱스 생성 전까지)
     const q = query(
       collection(db, 'visit_records'),
       where('groupId', '==', groupId),
       where('visitDate', '>=', startDate),
-      where('visitDate', '<=', endDate),
-      orderBy('visitDate', 'desc')
+      where('visitDate', '<=', endDate)
+      // orderBy('visitDate', 'desc') // 인덱스 생성 후 활성화
     );
 
     const querySnapshot = await getDocs(q);
@@ -1292,25 +1387,135 @@ export const getMonthlyVisitRecords = async (groupId, year, month) => {
 };
 
 /**
- * 전체 방문 통계 조회 (ExpenseChart용)
+ * 방문 기록 취소 (당일 내에만 가능)
  */
-export const getVisitStatistics = async (groupId) => {
+export const cancelVisitRecord = async (userId, groupId, restaurantName, visitDate) => {
   try {
     const q = query(
       collection(db, 'visit_records'),
+      where('userId', '==', userId),
       where('groupId', '==', groupId),
-      orderBy('createdAt', 'desc')
+      where('restaurantName', '==', restaurantName),
+      where('visitDate', '==', visitDate),
+      where('status', '==', 'pending') // pending 상태만 취소 가능
     );
 
     const querySnapshot = await getDocs(q);
-    const visits = [];
+    
+    if (querySnapshot.empty) {
+      return { success: false, error: '취소할 수 있는 방문 기록이 없습니다.' };
+    }
+
+    // 가장 최근 기록을 취소
+    const visitDoc = querySnapshot.docs[0];
+    await updateDoc(visitDoc.ref, {
+      status: 'cancelled',
+      cancelledAt: serverTimestamp()
+    });
+
+    console.log('❌ 방문 기록 취소 성공:', visitDoc.id);
+    return { success: true, id: visitDoc.id };
+  } catch (error) {
+    console.error('방문 기록 취소 실패:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * 방문 기록 확정 (자동 또는 수동)
+ */
+export const confirmVisitRecord = async (visitId) => {
+  try {
+    const visitRef = doc(db, 'visit_records', visitId);
+    await updateDoc(visitRef, {
+      status: 'confirmed',
+      confirmedAt: serverTimestamp()
+    });
+
+    console.log('✅ 방문 기록 확정 성공:', visitId);
+    return { success: true, id: visitId };
+  } catch (error) {
+    console.error('방문 기록 확정 실패:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * 하루 지난 pending 기록들을 자동 확정
+ */
+export const autoConfirmOldVisits = async (groupId) => {
+  try {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const q = query(
+      collection(db, 'visit_records'),
+      where('groupId', '==', groupId),
+      where('status', '==', 'pending'),
+      where('visitDate', '<=', yesterdayStr)
+    );
+
+    const querySnapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    let count = 0;
 
     querySnapshot.forEach((doc) => {
-      visits.push({
+      batch.update(doc.ref, {
+        status: 'confirmed',
+        confirmedAt: serverTimestamp()
+      });
+      count++;
+    });
+
+    if (count > 0) {
+      await batch.commit();
+      console.log(`🔄 ${count}개의 방문 기록이 자동 확정되었습니다.`);
+    }
+
+    return { success: true, confirmedCount: count };
+  } catch (error) {
+    console.error('자동 확정 실패:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * 전체 방문 통계 조회 (ExpenseChart용) - 하이브리드 시스템
+ */
+export const getVisitStatistics = async (groupId, includeMode = 'all') => {
+  try {
+    // 임시로 orderBy 제거 (인덱스 생성 전까지)
+    const q = query(
+      collection(db, 'visit_records'),
+      where('groupId', '==', groupId)
+      // orderBy('createdAt', 'desc') // 인덱스 생성 후 활성화
+    );
+
+    const querySnapshot = await getDocs(q);
+    const allVisits = [];
+
+    querySnapshot.forEach((doc) => {
+      allVisits.push({
         id: doc.id,
         ...doc.data()
       });
     });
+
+    // 모드별 필터링
+    let visits = [];
+    switch (includeMode) {
+      case 'confirmed': // 확정된 것만
+        visits = allVisits.filter(visit => visit.status === 'confirmed');
+        break;
+      case 'pending': // 대기 중인 것만  
+        visits = allVisits.filter(visit => visit.status === 'pending');
+        break;
+      case 'all': // 모두 (취소된 것 제외)
+      default:
+        visits = allVisits.filter(visit => visit.status !== 'cancelled');
+        break;
+    }
 
     // 월별 방문 횟수 계산
     const currentDate = new Date();
@@ -1327,13 +1532,25 @@ export const getVisitStatistics = async (groupId) => {
       restaurantVisits[name] = (restaurantVisits[name] || 0) + 1;
     });
 
+    // 상태별 통계
+    const statusCounts = {
+      pending: allVisits.filter(v => v.status === 'pending').length,
+      confirmed: allVisits.filter(v => v.status === 'confirmed').length,
+      cancelled: allVisits.filter(v => v.status === 'cancelled').length
+    };
+
+    console.log(`📊 방문 통계 조회 완료: 총 ${visits.length}건 (모드: ${includeMode})`);
+    console.log('📈 상태별 통계:', statusCounts);
+
     return { 
       success: true, 
       data: {
         totalVisits: visits.length,
         monthlyVisits,
         restaurantVisits,
-        allVisits: visits
+        allVisits: visits,
+        statusCounts,
+        includeMode
       }
     };
   } catch (error) {
