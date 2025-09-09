@@ -216,7 +216,9 @@
               <!-- 기본 정보 -->
               <div class="info-card">
                 <div class="restaurant-image-header">
-                  <img :src="selectedRestaurantDetail.image || '/api/placeholder/300/200'" :alt="selectedRestaurantDetail.name" />
+                  <div class="restaurant-emoji-image">
+                    {{ getRestaurantEmoji(selectedRestaurantDetail.name) }}
+                  </div>
                   <div class="info-overlay">
                     <div class="category-badge">{{ getCategoryName(selectedRestaurantDetail.category) }}</div>
                     <div class="rating-info">
@@ -263,12 +265,17 @@
             <div class="map-panel">
               <div class="map-card">
                 <h4>🗺️ 위치</h4>
-                <div class="map-container" id="naverMap">
-                  <!-- 네이버 지도가 여기에 렌더링됩니다 -->
-                  <div class="map-placeholder">
+                <div class="map-container">
+                  <NaverMap 
+                    v-if="selectedRestaurantDetail?.location"
+                    :restaurant="selectedRestaurantDetail"
+                    :current-location="currentLocation"
+                    @distance-calculated="onDistanceCalculated"
+                  />
+                  <div v-else class="map-placeholder">
                     <div class="map-icon">🗺️</div>
-                    <p>네이버 지도 준비 중...</p>
-                    <p class="map-address">{{ selectedRestaurantDetail.address || '주소 정보 없음' }}</p>
+                    <p>위치 정보가 없습니다</p>
+                    <p class="map-address">{{ selectedRestaurantDetail?.address || '주소 정보 없음' }}</p>
                   </div>
                 </div>
                 
@@ -456,6 +463,7 @@ import { gsap } from 'gsap';
 const GroupCalendar = defineAsyncComponent(() => import('@/components/Features/GroupCalendar.vue'));
 const GroupManagement = defineAsyncComponent(() => import('@/components/Features/GroupManagement.vue'));
 const ExpenseChart = defineAsyncComponent(() => import('@/components/Features/ExpenseChart.vue'));
+const NaverMap = defineAsyncComponent(() => import('@/components/Features/NaverMap.vue'));
 import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getAllRestaurants as getRestaurantsCount, getUser, getUserGroups, getRestaurantByName, checkAndResetMonthlyExpenses, getGroupMembersMonthlyExpenses, updateUser } from '@/services/firebaseDBv2.js';
 import { getCurrentUser, logout, onAuthStateChange } from '@/services/firebaseAuth.js';
 import { DEFAULT_LOCATION, DEFAULT_USER, DEFAULT_GROUP } from '@/config/constants.js';
@@ -464,7 +472,8 @@ export default {
   components: {
     GroupCalendar,
     GroupManagement,
-    ExpenseChart
+    ExpenseChart,
+    NaverMap
   },
   setup() {
     // 상태 관리
@@ -581,11 +590,22 @@ export default {
     });
     
     // 현재 위치 정보 (사용자 데이터에서 가져옴)
-    const currentLocation = computed(() => currentUser.value.location || {
-      name: '한진빌딩',
-      address: '서울특별시 중구 남대문로 63',
-      lat: 37.5665,
-      lng: 126.9780
+    const currentLocation = computed(() => {
+      const userLocation = currentUser.value.location;
+      if (userLocation && userLocation.lat && userLocation.lng) {
+        return {
+          name: userLocation.name || '현재 위치',
+          address: userLocation.address || `${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}`,
+          lat: userLocation.lat,
+          lng: userLocation.lng
+        };
+      }
+      return {
+        name: '한진빌딩',
+        address: '서울특별시 중구 남대문로 63',
+        lat: 37.5665,
+        lng: 126.9780
+      };
     });
     
     // 플랫폼 통계 (Firebase 데이터 기반)
@@ -603,15 +623,19 @@ export default {
     const loadRestaurants = async () => {
       try {
         loading.value = true;
-        console.log('음식점 데이터 로드 시작...');
+        if (import.meta.env.DEV) {
+          console.log('음식점 데이터 로드 시작...');
+        }
         
         // 간단한 방법으로 모든 음식점 가져오기
         const restaurantData = await getAllRestaurants(50);
         restaurants.value = restaurantData;
-        console.log('음식점 데이터 로드 완료:', restaurantData.length, '개');
+        if (import.meta.env.DEV) {
+          console.log('음식점 데이터 로드 완료:', restaurantData.length, '개');
+        }
         
         // 데이터 확인을 위한 로그
-        if (restaurantData.length > 0) {
+        if (import.meta.env.DEV && restaurantData.length > 0) {
           console.log('첫 번째 음식점:', restaurantData[0]);
         }
       } catch (error) {
@@ -1037,6 +1061,61 @@ export default {
       };
       return categoryMap[category] || category;
     };
+
+    // 음식점 이름에 따른 이모지 매핑
+    const getRestaurantEmoji = (restaurantName) => {
+      if (!restaurantName) return '🍽️';
+      
+      const name = restaurantName.toLowerCase();
+      
+      // 한식
+      if (name.includes('한식') || name.includes('김치') || name.includes('비빔밥') || 
+          name.includes('된장') || name.includes('찌개') || name.includes('국') ||
+          name.includes('신의주') || name.includes('태진옥') || name.includes('청진동') ||
+          name.includes('용호동') || name.includes('애성회관') || name.includes('강남면옥')) {
+        return '🍚';
+      }
+      
+      // 중식
+      if (name.includes('중식') || name.includes('짜장') || name.includes('짬뽕') || 
+          name.includes('탕수육') || name.includes('일품향')) {
+        return '🥢';
+      }
+      
+      // 일식
+      if (name.includes('일식') || name.includes('초밥') || name.includes('라멘') || 
+          name.includes('우동') || name.includes('돈까스') || name.includes('밀피유')) {
+        return '🍜';
+      }
+      
+      // 양식
+      if (name.includes('양식') || name.includes('스테이크') || name.includes('파스타') || 
+          name.includes('피자') || name.includes('리원') || name.includes('멘무샤')) {
+        return '🍝';
+      }
+      
+      // 패스트푸드
+      if (name.includes('맥도날드') || name.includes('맘스터치') || name.includes('kfc') || 
+          name.includes('bbq') || name.includes('버거') || name.includes('치킨') ||
+          name.includes('보노보스') || name.includes('콜리그')) {
+        return '🍔';
+      }
+      
+      // 카페/디저트
+      if (name.includes('카페') || name.includes('커피') || name.includes('모모카페') || 
+          name.includes('알로프트') || name.includes('스쿨푸드')) {
+        return '☕';
+      }
+      
+      // 고기/구이
+      if (name.includes('고기') || name.includes('구이') || name.includes('돈우가') || 
+          name.includes('박씨화로구이') || name.includes('족발') || name.includes('미쓰족발')) {
+        return '🥩';
+      }
+      
+      // 기타
+      return '🍽️';
+    };
     
     // 모달 상태
     const showGroupModal = ref(false);
@@ -1171,6 +1250,40 @@ export default {
         alert('주소 정보가 없습니다.');
       }
     };
+
+    // 거리 계산 결과 처리
+    const onDistanceCalculated = (distanceInfo) => {
+      console.log('거리 정보:', distanceInfo);
+      // 필요시 추가 처리 로직
+    };
+
+    // 현재 위치 가져오기
+    const getCurrentLocation = () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            // currentUser의 location 업데이트
+            if (currentUser.value) {
+              currentUser.value.location = {
+                ...currentUser.value.location,
+                lat: lat,
+                lng: lng,
+                name: '현재 위치',
+                address: `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+              };
+            }
+            console.log('현재 위치:', { lat, lng });
+          },
+          (error) => {
+            console.warn('위치 정보를 가져올 수 없습니다:', error);
+            // 기본값 유지
+          }
+        );
+      }
+    };
     
     const selectRestaurantForLunch = (restaurant) => {
       console.log('음식점 선택:', restaurant);
@@ -1242,6 +1355,9 @@ export default {
 
     // 컴포넌트 마운트 시 데이터 로드 및 그래프 초기화
     onMounted(async () => {
+      // 현재 위치 가져오기
+      getCurrentLocation();
+      
       // 인증 상태 감지 설정
       authUnsubscribe = setupAuthListener();
       
@@ -1540,6 +1656,8 @@ export default {
       closeRestaurantModal,
       openNaverMap,
       openKakaoMap,
+      onDistanceCalculated,
+      getCurrentLocation,
       selectRestaurantForLunch,
       selectForLunch,
       handleDateSelected,
@@ -1553,6 +1671,7 @@ export default {
       loadStatsData,
       handleLogout,
       getCategoryName,
+      getRestaurantEmoji,
       // 모달 관련
       showStatusModal,
       modalData,
@@ -2979,6 +3098,18 @@ export default {
   width: 100%;
   height: 200px;
   object-fit: cover;
+}
+
+.restaurant-emoji-image {
+  width: 100%;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  font-size: 4rem;
+  border: 2px solid #e0e0e0;
 }
 
 .info-overlay {

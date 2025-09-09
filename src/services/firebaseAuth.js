@@ -15,7 +15,9 @@ import {
 export const login = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    console.log("로그인 성공:", userCredential.user.email);
+    if (import.meta.env.DEV) {
+      console.log("로그인 성공:", userCredential.user.email);
+    }
     return userCredential.user;
   } catch (error) {
     console.error("로그인 실패:", error.message);
@@ -61,7 +63,9 @@ export const signup = async (email, password, userData) => {
     //   lastActiveAt: new Date()
     // });
     
-    console.log("회원가입 성공:", user.email);
+    if (import.meta.env.DEV) {
+      console.log("회원가입 성공:", user.email);
+    }
     return user;
   } catch (error) {
     console.error("회원가입 실패:", error.message);
@@ -73,7 +77,9 @@ export const signup = async (email, password, userData) => {
 export const logout = async () => {
   try {
     await signOut(auth);
-    console.log("로그아웃 성공");
+    if (import.meta.env.DEV) {
+      console.log("로그아웃 성공");
+    }
   } catch (error) {
     console.error("로그아웃 실패:", error);
     throw error;
@@ -84,7 +90,9 @@ export const logout = async () => {
 export const resetPassword = async (email) => {
   try {
     await sendPasswordResetEmail(auth, email);
-    console.log("비밀번호 재설정 이메일 전송 성공");
+    if (import.meta.env.DEV) {
+      console.log("비밀번호 재설정 이메일 전송 성공");
+    }
   } catch (error) {
     console.error("비밀번호 재설정 실패:", error.message);
     throw error;
@@ -109,12 +117,16 @@ export const devAutoLogin = async () => {
   
   try {
     const email = import.meta.env.VITE_DEV_USER_EMAIL || 'test@example.com';
-    const password = import.meta.env.VITE_DEV_USER_PASSWORD || 'testpassword';
+    const password = import.meta.env.VITE_DEV_USER_PASSWORD || 'dev_password_123';
     const user = await login(email, password);
-    console.log('🔧 개발용 자동 로그인 성공:', user.email);
+    if (import.meta.env.DEV) {
+      console.log('🔧 개발용 자동 로그인 성공:', user.email);
+    }
     return user;
   } catch (error) {
-    console.log('🔧 개발용 계정이 없습니다. 수동으로 로그인해주세요.');
+    if (import.meta.env.DEV) {
+      console.log('🔧 개발용 계정이 없습니다. 수동으로 로그인해주세요.');
+    }
     return null;
   }
 };

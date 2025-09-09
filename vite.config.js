@@ -15,6 +15,20 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  server: {
+    proxy: {
+      // 네이버 지도 API 프록시
+      '/api/naver': {
+        target: 'https://naveropenapi.apigw.ntruss.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/naver/, ''),
+        headers: {
+          'X-NCP-APIGW-API-KEY-ID': process.env.VITE_NAVER_MAP_CLIENT_ID || '',
+          'X-NCP-APIGW-API-KEY': process.env.VITE_NAVER_MAP_CLIENT_SECRET || ''
+        }
+      }
+    }
+  },
   build: {
     // 코드 스플리팅 최적화
     rollupOptions: {
