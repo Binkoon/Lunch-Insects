@@ -1,5 +1,23 @@
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, nextTick } from 'vue';
 import { HolidayUtils } from '@/config/constants.js';
+import { db } from '@/services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { 
+  saveMemberStatus, 
+  getMemberStatus, 
+  getGroupMemberStatuses, 
+  deleteMemberStatus,
+  getGroup,
+  getUser,
+  getAllRestaurants,
+  addRestaurantVisit,
+  getRestaurantVisitCounts,
+  saveVisitRecord,
+  cancelVisitRecord,
+  getMonthlyVisitRecords,
+  getVisitStatistics
+} from '@/services/firebaseDBv2.js';
+import { getCurrentUser } from '@/services/firebaseAuth.js';
 
 /**
  * 캘린더 관련 비즈니스 로직을 관리하는 Composable
@@ -14,6 +32,12 @@ export const useCalendar = (props, emit) => {
   const restaurants = ref([]);
   const proposals = ref([]);
   const loading = ref(false);
+  const currentUser = ref(null);
+  const showProposalModal = ref(false);
+  const selectedProposal = ref(null);
+  const showRestaurantDetailModal = ref(false);
+  const selectedRestaurantDetail = ref(null);
+  const selectedRestaurantDate = ref('');
 
   // 계산된 속성
   const currentMonthText = computed(() => {
@@ -23,6 +47,35 @@ export const useCalendar = (props, emit) => {
   });
 
   const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+
+  // 오늘 날짜 확인
+  const isTodayDate = (date) => {
+    const today = new Date();
+    return date.getFullYear() === today.getFullYear() &&
+           date.getMonth() === today.getMonth() &&
+           date.getDate() === today.getDate();
+  };
+
+  // 날짜 객체 생성
+  const createDayObject = (date, isOtherMonth) => {
+    const dateStr = date.toISOString().split('T')[0];
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const isHoliday = HolidayUtils.isHoliday(dateStr);
+    const isWeekendOrHoliday = isWeekend || isHoliday;
+    const isToday = isTodayDate(date);
+    
+    return {
+      date: dateStr,
+      day: date.getDate(),
+      isOtherMonth,
+      isWeekend,
+      isHoliday,
+      isWeekendOrHoliday,
+      isToday,
+      availableMembers: actualMembers.value.map(m => m.id)
+    };
+  };
 
   // 캘린더 날짜 생성
   const calendarDays = computed(() => {
@@ -64,35 +117,6 @@ export const useCalendar = (props, emit) => {
     return days;
   });
 
-  // 날짜 객체 생성
-  const createDayObject = (date, isOtherMonth) => {
-    const dateStr = date.toISOString().split('T')[0];
-    const dayOfWeek = date.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-    const isHoliday = HolidayUtils.isHoliday(dateStr);
-    const isWeekendOrHoliday = isWeekend || isHoliday;
-    const isToday = isTodayDate(date);
-    
-    return {
-      date: dateStr,
-      day: date.getDate(),
-      isOtherMonth,
-      isWeekend,
-      isHoliday,
-      isWeekendOrHoliday,
-      isToday,
-      availableMembers: actualMembers.value.map(m => m.id)
-    };
-  };
-
-  // 오늘 날짜 확인
-  const isTodayDate = (date) => {
-    const today = new Date();
-    return date.getFullYear() === today.getFullYear() &&
-           date.getMonth() === today.getMonth() &&
-           date.getDate() === today.getDate();
-  };
-
   // 공휴일 확인
   const isHoliday = (dateStr) => {
     return HolidayUtils.isHoliday(dateStr);
@@ -130,6 +154,24 @@ export const useCalendar = (props, emit) => {
   const selectDay = (day) => {
     selectedDay.value = day;
     emit('date-selected', day.date);
+    
+    // 주말이 아닌 경우 상태 모달 열기
+    if (!day.isWeekendOrHoliday) {
+      const currentMember = actualMembers.value.find(m => m.id === (currentUser.value?.uid || currentUser.value?.id))
+        || { id: currentUser.value?.uid || currentUser.value?.id, name: currentUser.value?.name || '나' };
+      
+      const modalData = {
+        member: currentMember,
+        date: day.date,
+        currentStatus: 'available',
+        allMembers: actualMembers.value,
+        memberStatuses: memberStatuses.value,
+        restaurants: restaurants.value,
+        groupId: props.groupId
+      };
+      
+      emit('open-status-modal', modalData);
+    }
   };
 
   // 상세 정보 닫기
@@ -248,24 +290,47 @@ export const useCalendar = (props, emit) => {
   // 데이터 로드 함수들
   const loadMemberNames = async (members) => {
     try {
+      console.log('loadMemberNames 호출됨, members:', members);
       if (!members || members.length === 0) {
+        console.log('멤버가 없어서 빈 배열 반환');
         actualMembers.value = [];
         return;
       }
 
       const memberPromises = members.map(async (member) => {
         // 이미 객체 형태이고 이름이 있는 경우
-        if (typeof member === 'object') {
+        if (typeof member === 'object' && member.name) {
           const memberId = member.id || member.uid || member.userId || member;
           return {
             id: memberId,
-            name: member.name || `사용자 ${String(memberId).slice(-4)}`,
+            name: member.name,
             color: member.color || `#${Math.floor(Math.random()*16777215).toString(16)}`
           };
         }
 
-        // UID만 있는 경우
-        const memberId = typeof member === 'string' ? member : member.id;
+        // UID만 있는 경우 - Firebase에서 사용자 정보 가져오기
+        const memberId = typeof member === 'string' ? member : (member.id || member.uid || member.userId);
+        
+        try {
+          // getUser 함수를 사용하여 사용자 정보 가져오기
+          console.log(`사용자 ${memberId} 정보 가져오기 시도...`);
+          const userData = await getUser(memberId);
+          console.log(`사용자 ${memberId} 정보:`, userData);
+          
+          if (userData && userData.success) {
+            const userName = userData.data.name || userData.data.displayName || `사용자 ${String(memberId).slice(-4)}`;
+            console.log(`사용자 ${memberId} 이름:`, userName);
+            return {
+              id: memberId,
+              name: userName,
+              color: `#${Math.floor(Math.random()*16777215).toString(16)}`
+            };
+          }
+        } catch (error) {
+          console.warn(`사용자 ${memberId} 정보 가져오기 실패:`, error);
+        }
+
+        // Firebase에서 가져오기 실패한 경우 기본값 사용
         return {
           id: memberId,
           name: `사용자 ${String(memberId).slice(-4)}`,
@@ -314,6 +379,208 @@ export const useCalendar = (props, emit) => {
     console.log('멤버 상태 로드:', { startDate, endDate });
   };
 
+  // 누락된 함수들 추가
+  const getSelectedRestaurantsForDay = (day) => {
+    const dayStatuses = memberStatuses.value[day.date] || {};
+    const restaurants = [];
+    
+    Object.values(dayStatuses).forEach(status => {
+      if (status.status === 'available' && status.details?.restaurant) {
+        restaurants.push({
+          name: status.details.restaurant,
+          mealType: status.details.mealType || 'lunch',
+          participants: status.details.participants || [],
+          mealCard: status.details.mealCard || 0,
+          cash: status.details.cash || 0,
+          totalAmount: status.details.totalAmount || 0,
+          externalMembers: status.details.externalMembers || []
+        });
+      }
+    });
+    
+    return restaurants;
+  };
+
+  const openRestaurantDetailModal = async (restaurant, date) => {
+    console.log('음식점 상세 모달 열기:', restaurant, date);
+  };
+
+  const closeRestaurantDetailModal = () => {
+    console.log('음식점 상세 모달 닫기');
+  };
+
+  const loadGroupData = async () => {
+    try {
+      const { getGroup } = await import('@/services/firebaseDBv2.js');
+      const group = await getGroup(props.groupId);
+      if (group && group.members) {
+        emit('group-loaded', group);
+      }
+    } catch (error) {
+      console.error('그룹 데이터 로드 실패:', error);
+    }
+  };
+
+  const loadProposals = async () => {
+    proposals.value = [];
+  };
+
+  const saveMemberStatusToFirebase = async (userId, date, status, details = {}) => {
+    try {
+      const { saveMemberStatus } = await import('@/services/firebaseDBv2.js');
+      const result = await saveMemberStatus(props.groupId, userId, date, status, details);
+      if (result.success) {
+        if (!memberStatuses.value[date]) {
+          memberStatuses.value[date] = {};
+        }
+        memberStatuses.value[date][userId] = { status, details };
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('멤버 상태 저장 실패:', error);
+      return false;
+    }
+  };
+
+  const deleteMemberStatusFromFirebase = async (userId, date) => {
+    try {
+      const { deleteMemberStatus } = await import('@/services/firebaseDBv2.js');
+      const result = await deleteMemberStatus(props.groupId, userId, date);
+      if (result.success) {
+        if (memberStatuses.value[date] && memberStatuses.value[date][userId]) {
+          delete memberStatuses.value[date][userId];
+        }
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('멤버 상태 삭제 실패:', error);
+      return false;
+    }
+  };
+
+  // 이벤트 핸들러들
+  const handleDayClick = (day) => {
+    if (!day.isWeekendOrHoliday) {
+      selectDay(day);
+      emit('date-selected', day);
+    }
+  };
+
+  const handleRestaurantClick = (restaurant, date) => {
+    openRestaurantDetailModal(restaurant, date);
+  };
+
+  const handleProposalClick = (proposal) => {
+    console.log('제안 클릭:', proposal);
+  };
+
+  const handleProposalAccept = (proposal) => {
+    console.log('제안 수락:', proposal);
+  };
+
+  const handleProposalReject = (proposal) => {
+    console.log('제안 거절:', proposal);
+  };
+
+  const handleProposalCreate = (proposal) => {
+    console.log('제안 생성:', proposal);
+  };
+
+  const handleProposalDelete = (proposal) => {
+    console.log('제안 삭제:', proposal);
+  };
+
+  const handleDragStart = (proposal) => {
+    console.log('드래그 시작:', proposal);
+  };
+
+  const handleDragOver = (event) => {
+    event.preventDefault();
+  };
+
+  const handleDragLeave = (event) => {
+    // 드래그 리브 로직
+  };
+
+  const handleDrop = (event, day) => {
+    event.preventDefault();
+    console.log('드롭:', day);
+  };
+
+  const handleDragEnd = () => {
+    console.log('드래그 종료');
+  };
+
+  // 누락된 함수들 추가
+  const closeProposalModal = () => {
+    showProposalModal.value = false;
+    selectedProposal.value = null;
+  };
+
+  const handleProposalVote = (proposal, vote) => {
+    console.log('제안 투표:', proposal, vote);
+  };
+
+  const handleProposalConfirmed = (proposal) => {
+    console.log('제안 확인:', proposal);
+  };
+
+  const handleProposalMoved = (proposal, newDate) => {
+    console.log('제안 이동:', proposal, newDate);
+  };
+
+  const getRestaurantMembers = (restaurant, date) => {
+    const dayStatuses = memberStatuses.value[date] || {};
+    const members = [];
+    
+    Object.entries(dayStatuses).forEach(([memberId, status]) => {
+      if (status.status === 'available' && status.details?.restaurant === restaurant) {
+        const member = actualMembers.value.find(m => m.id === memberId);
+        if (member) {
+          members.push({
+            ...member,
+            participants: status.details.participants || [],
+            mealCard: status.details.mealCard || 0,
+            cash: status.details.cash || 0,
+            totalAmount: status.details.totalAmount || 0,
+            externalMembers: status.details.externalMembers || []
+          });
+        }
+      }
+    });
+    
+    return members;
+  };
+
+  // 생명주기 훅
+  onMounted(async () => {
+    console.log('useCalendar onMounted');
+    if (props.groupId) {
+      await loadMemberNames(props.members);
+      await loadRestaurants();
+      await loadMemberStatuses();
+    }
+  });
+
+  // props 변경 감지
+  watch(() => props.groupId, async (newGroupId) => {
+    if (newGroupId) {
+      console.log('groupId 변경 감지:', newGroupId);
+      await loadMemberNames(props.members);
+      await loadRestaurants();
+      await loadMemberStatuses();
+    }
+  });
+
+  watch(() => props.members, async (newMembers) => {
+    if (newMembers && newMembers.length > 0) {
+      console.log('members 변경 감지:', newMembers);
+      await loadMemberNames(newMembers);
+    }
+  });
+
   return {
     // 상태
     currentDate,
@@ -323,6 +590,12 @@ export const useCalendar = (props, emit) => {
     restaurants,
     proposals,
     loading,
+    currentUser,
+    showProposalModal,
+    selectedProposal,
+    showRestaurantDetailModal,
+    selectedRestaurantDetail,
+    selectedRestaurantDate,
     
     // 계산된 속성
     currentMonthText,
@@ -359,10 +632,55 @@ export const useCalendar = (props, emit) => {
     // 음식점 관련 함수
     selectRestaurant,
     getAvailableMembersForDay,
+    getSelectedRestaurantsForDay,
+    openRestaurantDetailModal,
+    closeRestaurantDetailModal,
     
     // 데이터 로드 함수
     loadMemberNames,
     loadRestaurants,
-    loadMemberStatuses
+    loadMemberStatuses,
+    loadGroupData,
+    loadProposals,
+    
+    // 저장/삭제 함수
+    saveMemberStatusToFirebase,
+    deleteMemberStatusFromFirebase,
+    
+    // 이벤트 핸들러
+    handleDayClick,
+    handleRestaurantClick,
+    handleProposalClick,
+    handleProposalAccept,
+    handleProposalReject,
+    handleProposalCreate,
+    handleProposalDelete,
+    handleDragStart,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleDragEnd,
+    
+    // 제안 관련 변수
+    selectedProposal,
+    showProposalModal,
+    
+    // 제안 관련 함수
+    closeProposalModal,
+    handleProposalVote,
+    handleProposalConfirmed,
+    handleProposalMoved,
+    
+    // 음식점 관련 변수
+    showRestaurantDetailModal,
+    selectedRestaurantDetail,
+    selectedRestaurantDate,
+    
+    // 음식점 관련 함수
+    getRestaurantMembers,
+    
+    // 유틸리티 함수
+    createDayObject,
+    isTodayDate
   };
 };
