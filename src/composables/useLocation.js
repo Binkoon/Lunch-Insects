@@ -32,18 +32,19 @@ export const useLocation = () => {
         },
         (error) => {
           console.error('위치 정보를 가져올 수 없습니다:', error);
-          alert('위치 정보에 접근할 수 없습니다.');
+          // alert 대신 콘솔 로그만 출력하고 기본 위치 사용
+          console.warn('위치 정보 접근 실패, 기본 위치 사용:', currentLocation.value);
         }
       );
     } else {
-      alert('이 브라우저는 위치 정보를 지원하지 않습니다.');
+      console.warn('이 브라우저는 위치 정보를 지원하지 않습니다. 기본 위치 사용:', currentLocation.value);
     }
   };
 
   // 네이버 지도 열기
   const openNaverMap = (restaurant) => {
     if (!restaurant || !restaurant.lat || !restaurant.lng) {
-      alert('음식점 위치 정보가 없습니다.');
+      console.warn('음식점 위치 정보가 없습니다.');
       return;
     }
 
@@ -55,7 +56,7 @@ export const useLocation = () => {
   // 카카오 지도 열기
   const openKakaoMap = (restaurant) => {
     if (!restaurant || !restaurant.lat || !restaurant.lng) {
-      alert('음식점 위치 정보가 없습니다.');
+      console.warn('음식점 위치 정보가 없습니다.');
       return;
     }
 

@@ -45,9 +45,11 @@ export const Group = {
 // 음식점 정보
 export const Restaurant = {
   id: String,
-  name: String,
+  name: String, // 음식점 이름 (예: "바스버거")
+  branchName: String, // 지점명 (예: "서소문시청역점")
+  fullName: String, // 전체 이름 (예: "바스버거 서소문시청역점")
   category: String, // '한식', '일식', '양식', '중식', '카페', '패스트푸드'
-  address: String,
+  address: String, // 상세 주소
   location: {
     latitude: Number,
     longitude: Number

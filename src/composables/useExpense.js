@@ -39,17 +39,16 @@ export const useExpense = () => {
       const expenses = await getUserMonthlyExpenses(userId);
       
       if (expenses) {
-        monthlyExpenseData.value.personal = {
-          ticketPoints: expenses.ticketPoints || 0,
-          cash: expenses.cash || 0,
-          total: (expenses.ticketPoints || 0) + (expenses.cash || 0)
-        };
+        // 분기별 데이터로 변환
+        const quarterlyData = convertToQuarterlyData(expenses);
+        monthlyExpenseData.value.personal = quarterlyData;
       } else {
-        // 데이터가 없는 경우 기본값 설정
+        // 데이터가 없는 경우 기본값 설정 (분기별)
         monthlyExpenseData.value.personal = {
-          ticketPoints: 0,
-          cash: 0,
-          total: 0
+          Q1: { ticketPoints: 0, cash: 0, total: 0 },
+          Q2: { ticketPoints: 0, cash: 0, total: 0 },
+          Q3: { ticketPoints: 0, cash: 0, total: 0 },
+          Q4: { ticketPoints: 0, cash: 0, total: 0 }
         };
       }
       
@@ -58,13 +57,39 @@ export const useExpense = () => {
       console.error('개인 월별 지출 데이터 로드 실패:', error);
       // 오류 시 기본값 설정
       monthlyExpenseData.value.personal = {
-        ticketPoints: 0,
-        cash: 0,
-        total: 0
+        Q1: { ticketPoints: 0, cash: 0, total: 0 },
+        Q2: { ticketPoints: 0, cash: 0, total: 0 },
+        Q3: { ticketPoints: 0, cash: 0, total: 0 },
+        Q4: { ticketPoints: 0, cash: 0, total: 0 }
       };
     } finally {
       loading.value = false;
     }
+  };
+
+  // 월별 데이터를 분기별 데이터로 변환
+  const convertToQuarterlyData = (monthlyData) => {
+    const quarters = {
+      Q1: { ticketPoints: 0, cash: 0, total: 0 },
+      Q2: { ticketPoints: 0, cash: 0, total: 0 },
+      Q3: { ticketPoints: 0, cash: 0, total: 0 },
+      Q4: { ticketPoints: 0, cash: 0, total: 0 }
+    };
+
+    // 월별 데이터를 분기별로 집계
+    Object.entries(monthlyData).forEach(([month, data]) => {
+      const monthNum = parseInt(month);
+      const quarter = Math.ceil(monthNum / 3);
+      const quarterKey = `Q${quarter}`;
+      
+      if (quarters[quarterKey]) {
+        quarters[quarterKey].ticketPoints += data.ticketPoints || 0;
+        quarters[quarterKey].cash += data.cash || 0;
+        quarters[quarterKey].total += (data.ticketPoints || 0) + (data.cash || 0);
+      }
+    });
+
+    return quarters;
   };
 
   // 월별 지출 데이터 로드 (그룹)
@@ -168,6 +193,7 @@ export const useExpense = () => {
     loadGroupMonthlyExpenseData,
     loadStatsData,
     refreshExpenseChart,
-    refreshExpenseData
+    refreshExpenseData,
+    convertToQuarterlyData
   };
 };

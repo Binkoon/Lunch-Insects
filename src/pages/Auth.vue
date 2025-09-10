@@ -38,7 +38,7 @@
             <div v-if="isDevelopment" class="dev-info">
               <p><strong>개발환경 계정:</strong></p>
               <p>이메일: <code>test1@example.com</code></p>
-              <p>비밀번호: <code>test1</code></p>
+              <p>비밀번호: <code>***</code></p>
               <div class="dev-buttons">
                 <button class="dev-login-btn" @click="devLogin">
                   개발용 계정으로 로그인
@@ -540,7 +540,11 @@ export default {
         };
         
         // Firebase 인증을 사용한 실제 회원가입
-        const user = await signup('test1@example.com', 'test1', userData);
+        const user = await signup(
+          import.meta.env.VITE_DEV_USER_EMAIL || 'test1@example.com', 
+          import.meta.env.VITE_DEV_USER_PASSWORD || 'dev_password_123', 
+          userData
+        );
         console.log('개발용 계정 생성 성공:', user.email);
         
         // 계정 생성 후 바로 메인 페이지로 이동
@@ -565,8 +569,8 @@ export default {
       
       try {
         // 개발용 계정 정보로 자동 입력
-        loginData.value.email = 'test1@example.com';
-        loginData.value.password = 'test1';
+        loginData.value.email = import.meta.env.VITE_DEV_USER_EMAIL || 'test1@example.com';
+        loginData.value.password = import.meta.env.VITE_DEV_USER_PASSWORD || 'dev_password_123';
         
         // Firebase 인증을 사용한 실제 로그인
         const user = await login(loginData.value.email, loginData.value.password);

@@ -7,22 +7,33 @@
 const CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID
 const CLIENT_SECRET = import.meta.env.VITE_NAVER_MAP_CLIENT_SECRET
 
+// API 키 유효성 검사
+if (!CLIENT_ID || CLIENT_ID === 'your_naver_map_client_id_here') {
+  console.warn('⚠️ 네이버 지도 API 키가 설정되지 않았습니다. .env 파일을 확인하세요.')
+} else {
+  console.log('✅ 네이버 Maps API v3 키 설정됨:', CLIENT_ID.substring(0, 8) + '...')
+}
+
 /**
- * 네이버 지도 API 호출 (프록시 사용)
+ * 네이버 Maps API 호출 (새로운 API 구조)
  */
 export const callNaverAPI = async (endpoint, params = {}) => {
   try {
     const queryString = new URLSearchParams(params).toString()
-    const url = `/api/naver${endpoint}?${queryString}`
+    const url = `/api/naver-maps${endpoint}?${queryString}`
     
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'X-NCP-APIGW-API-KEY-ID': CLIENT_ID,
+        'X-NCP-APIGW-API-KEY': CLIENT_SECRET
       }
     })
     
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`API 호출 실패: ${response.status}`, errorText)
       throw new Error(`API 호출 실패: ${response.status}`)
     }
     
@@ -38,11 +49,13 @@ export const callNaverAPI = async (endpoint, params = {}) => {
  */
 export const getDirections = async (start, goal) => {
   try {
+    // 기존 Directions API 사용
     const result = await callNaverAPI('/map-direction/v1/driving', {
       start: `${start.lat},${start.lng}`,
       goal: `${goal.lat},${goal.lng}`,
       option: 'trafast'
     })
+    
     
     if (result.route && result.route.traoptimal && result.route.traoptimal.length > 0) {
       const route = result.route.traoptimal[0]
@@ -65,9 +78,11 @@ export const getDirections = async (start, goal) => {
  */
 export const geocodeAddress = async (address) => {
   try {
+    // 기존 Geocoding API 사용
     const result = await callNaverAPI('/map-geocode/v2/geocode', {
       query: address
     })
+    
     
     if (result.addresses && result.addresses.length > 0) {
       const addr = result.addresses[0]
@@ -87,19 +102,86 @@ export const geocodeAddress = async (address) => {
 }
 
 /**
- * 네이버 지도 스크립트 로드
+ * 음식점 검색 (정확한 위치 찾기)
+ * 체인점의 경우 지점명과 주소를 함께 사용
+ */
+export const searchRestaurant = async (restaurantName, branchName = '', address = '') => {
+  try {
+    // 검색 쿼리 구성
+    let searchQuery = restaurantName
+    if (branchName) {
+      searchQuery += ` ${branchName}`
+    }
+    if (address) {
+      searchQuery += ` ${address}`
+    }
+    
+    // 네이버 지도 검색 API 사용
+    const result = await callNaverAPI('/maps/v3/search', {
+      query: searchQuery,
+      type: 'place'
+    })
+    
+    if (result.places && result.places.length > 0) {
+      const place = result.places[0]
+      return {
+        success: true,
+        name: place.name,
+        address: place.address,
+        location: {
+          latitude: parseFloat(place.y),
+          longitude: parseFloat(place.x)
+        },
+        phone: place.phone || '',
+        category: place.category || '',
+        rating: place.rating || 0
+      }
+    }
+    
+    return { success: false, error: '음식점을 찾을 수 없습니다.' }
+  } catch (error) {
+    console.error('음식점 검색 실패:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * 네이버 지도 스크립트 로드 (CORS 오류 방지)
  */
 export const loadNaverMapScript = () => {
   return new Promise((resolve, reject) => {
     if (window.naver && window.naver.maps) {
+      console.log('✅ 네이버 지도 이미 로드됨')
       resolve()
       return
     }
     
+    // API 키가 없으면 에러
+    if (!CLIENT_ID || CLIENT_ID === 'your_naver_map_client_id_here') {
+      const error = new Error('네이버 지도 API 키가 설정되지 않았습니다.')
+      console.error('❌', error.message)
+      reject(error)
+      return
+    }
+    
+    // 콜백 함수를 전역으로 등록
+    window.naverMapCallback = () => {
+      console.log('✅ 네이버 지도 API v3 로드 완료')
+      delete window.naverMapCallback
+      resolve()
+    }
+    
+    // 네이버 지도 API v3 스크립트 로드 (콜백 방식)
     const script = document.createElement('script')
-    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${CLIENT_ID}`
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('네이버 지도 스크립트 로드 실패'))
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${CLIENT_ID}&callback=naverMapCallback`
+    script.crossOrigin = 'anonymous'
+    
+    script.onerror = (error) => {
+      console.error('❌ 네이버 지도 스크립트 로드 실패:', error)
+      delete window.naverMapCallback
+      reject(new Error('네이버 지도 스크립트 로드 실패'))
+    }
+    
     document.head.appendChild(script)
   })
 }

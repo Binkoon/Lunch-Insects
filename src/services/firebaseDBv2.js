@@ -1587,3 +1587,97 @@ export const migrateVisitData = async (groupId, visitData) => {
     return { success: false, error };
   }
 };
+
+// ==================== 음식점 위치 캐싱 ====================
+
+/**
+ * 음식점 위치 정보 저장/업데이트
+ */
+export const saveRestaurantLocation = async (restaurantId, locationData) => {
+  try {
+    const locationRef = doc(db, COLLECTIONS.RESTAURANT_LOCATIONS, restaurantId);
+    await setDoc(locationRef, {
+      restaurantId,
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+      address: locationData.address,
+      name: locationData.name,
+      category: locationData.category,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    
+    console.log('음식점 위치 저장 성공:', restaurantId);
+    return { success: true };
+  } catch (error) {
+    console.error('음식점 위치 저장 실패:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * 음식점 위치 정보 조회
+ */
+export const getRestaurantLocation = async (restaurantId) => {
+  try {
+    const locationRef = doc(db, COLLECTIONS.RESTAURANT_LOCATIONS, restaurantId);
+    const locationSnap = await getDoc(locationRef);
+    
+    if (locationSnap.exists()) {
+      return { success: true, data: locationSnap.data() };
+    } else {
+      return { success: false, error: '위치 정보를 찾을 수 없습니다.' };
+    }
+  } catch (error) {
+    console.error('음식점 위치 조회 실패:', error);
+    return { success: false, error };
+  }
+};
+
+/**
+ * 모든 음식점 위치 정보 조회
+ */
+export const getRestaurantLocations = async () => {
+  try {
+    const locationsQuery = query(
+      collection(db, COLLECTIONS.RESTAURANT_LOCATIONS),
+      orderBy('updatedAt', 'desc')
+    );
+    
+    const querySnapshot = await getDocs(locationsQuery);
+    const locations = [];
+    
+    querySnapshot.forEach((doc) => {
+      locations.push({ id: doc.id, ...doc.data() });
+    });
+    
+    console.log('음식점 위치 목록 조회 성공:', locations.length, '개');
+    return locations;
+  } catch (error) {
+    console.error('음식점 위치 목록 조회 실패:', error);
+    return [];
+  }
+};
+
+/**
+ * 음식점 위치 정보 일괄 저장
+ */
+export const batchSaveRestaurantLocations = async (locations) => {
+  try {
+    const batch = writeBatch(db);
+    
+    locations.forEach(location => {
+      const locationRef = doc(db, COLLECTIONS.RESTAURANT_LOCATIONS, location.restaurantId);
+      batch.set(locationRef, {
+        ...location,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+    
+    await batch.commit();
+    console.log('음식점 위치 일괄 저장 성공:', locations.length, '개');
+    return { success: true };
+  } catch (error) {
+    console.error('음식점 위치 일괄 저장 실패:', error);
+    return { success: false, error };
+  }
+};

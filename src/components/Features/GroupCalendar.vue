@@ -34,143 +34,16 @@
     </div>
 
     <!-- 캘린더 그리드 -->
-    <div class="calendar-container">
-      <!-- 요일 헤더 -->
-      <div class="weekdays-header">
-        <div class="weekday" v-for="day in weekdays" :key="day">
-          {{ day }}
-        </div>
-      </div>
-      
-      <!-- 날짜 그리드 -->
-      <div class="days-container">
-        <div 
-          v-for="day in calendarDays" 
-          :key="day.date"
-          :data-date="day.date"
-          class="day-card"
-          :class="{ 
-            'other-month': !day.isCurrentMonth,
-            'today': day.isToday,
-            'has-events': day.events.length > 0,
-            'selected': selectedDay?.date === day.date,
-            'weekend': day.isWeekend,
-            'holiday': day.isHoliday,
-            'disabled': day.isWeekendOrHoliday
-          }"
-          @click="handleDayClick(day)"
-        >
-          <div class="day-header">
-            <span class="day-number">{{ day.dayNumber }}</span>
-            <div v-if="day.isToday" class="today-indicator"></div>
-            <!-- 제안 알림 뱃지 -->
-            <div v-if="getProposalsForDay(day.date).length > 0" class="proposal-badge">
-              {{ getProposalsForDay(day.date).length }}
-            </div>
-          </div>
-          
-          <!-- 평일인 경우에만 제안/확정 메뉴 표시 -->
-          <div v-if="!day.isWeekendOrHoliday" class="day-content">
-            <!-- 선택된 음식점들 표시 -->
-            <div v-if="getSelectedRestaurantsForDay(day.date).length > 0" class="selected-restaurants">
-              <div 
-                v-for="restaurant in getSelectedRestaurantsForDay(day.date).slice(0, 2)" 
-                :key="restaurant.name"
-                class="selected-restaurant clickable"
-                @click.stop="openRestaurantDetailModal(restaurant, day.date)"
-                :title="`${restaurant.name} (${restaurant.count}명) - 클릭하여 상세보기`"
-              >
-                <span class="restaurant-icon">🍽️</span>
-                <span class="restaurant-name">{{ restaurant.name }}</span>
-                <span class="restaurant-count" v-if="restaurant.count > 1">{{ restaurant.count }}명</span>
-                <span class="restaurant-actions-hint">✏️</span>
-              </div>
-              <div v-if="getSelectedRestaurantsForDay(day.date).length > 2" class="more-restaurants clickable"
-                   @click.stop="openAllRestaurantsModal(day.date)"
-                   title="모든 선택된 음식점 보기">
-                +{{ getSelectedRestaurantsForDay(day.date).length - 2 }}
-              </div>
-            </div>
-            
-            <!-- 확정된 메뉴 표시 (기존 제안 시스템) -->
-            <div v-else-if="getConfirmedMealForDay(day.date)" class="confirmed-meal">
-              <div class="meal-icon">🍽️</div>
-              <div class="meal-name">{{ getConfirmedMealForDay(day.date) }}</div>
-            </div>
-            
-            <!-- 제안 중인 메뉴들 (확정되지 않은 경우만) -->
-            <div v-else-if="getProposalsForDay(day.date).length > 0" class="proposal-meals">
-              <div 
-                v-for="proposal in getProposalsForDay(day.date).slice(0, 2)" 
-                :key="proposal.id"
-                class="proposal-meal"
-                :class="getProposalStatus(proposal)"
-              >
-                <span class="meal-icon">{{ getProposalIcon(proposal) }}</span>
-                <span class="meal-name">{{ proposal.restaurant.name }}</span>
-              </div>
-              <div v-if="getProposalsForDay(day.date).length > 2" class="more-proposals">
-                +{{ getProposalsForDay(day.date).length - 2 }}
-              </div>
-            </div>
-            
-            <!-- 기존 제안 리스트 (숨김 처리) -->
-            <div v-if="false" class="proposals">
-              <div 
-                v-for="proposal in getProposalsForDay(day.date)" 
-                :key="proposal.id"
-                class="proposal-item"
-                :class="[getProposalStatus(proposal), { 'dragging': draggingProposal?.id === proposal.id }]"
-                :draggable="true"
-                @click="openProposalModal(proposal)"
-                @dragstart="startDrag($event, proposal)"
-                @dragend="endDrag"
-                @dragenter.prevent
-                @dragover.prevent
-                @drop="dropProposal($event, day.date)"
-              >
-                <div class="proposal-info">
-                  <span class="proposer-name">{{ proposal.proposer.name }}</span>
-                  <span class="restaurant-name">{{ proposal.restaurant.name }}</span>
-                  <span class="proposal-status">{{ 
-                    getProposalStatus(proposal) === 'pending' ? '제안 중' : 
-                    getProposalStatus(proposal) === 'confirmed' ? '🎉 확정' : 
-                    '❌ 거부' 
-                  }}</span>
-                </div>
-                <div class="drag-handle">⋮⋮</div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 주말 표시 -->
-          <div v-else-if="day.isWeekend && !day.isHoliday" class="weekend-indicator">
-            <span class="weekend-text">주말</span>
-          </div>
-          
-          <!-- 공휴일 표시 -->
-          <div v-else-if="day.isHoliday" class="holiday-indicator">
-            <span class="holiday-text">공휴일</span>
-          </div>
-          
-          <!-- 이벤트 미리보기 -->
-          <div v-if="day.events.length > 0" class="events-preview">
-            <div 
-              v-for="event in day.events.slice(0, 1)" 
-              :key="event.id"
-              class="event-preview"
-              :class="event.type"
-            >
-              <span class="event-icon">{{ getEventIcon(event.type) }}</span>
-              <span class="event-title">{{ event.title }}</span>
-            </div>
-            <div v-if="day.events.length > 1" class="more-events">
-              +{{ day.events.length - 1 }}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <CalendarGrid
+      :calendar-days="calendarDays"
+      :selected-day="selectedDay"
+      :weekdays="weekdays"
+      :member-statuses="memberStatuses"
+      :proposals="proposals"
+      :actual-members="actualMembers"
+      @day-click="handleDayClick"
+      @restaurant-click="openRestaurantDetailModal"
+    />
 
     <!-- 선택된 날짜 상세 정보 (패널 비활성화, 모달로 대체) -->
     <div v-if="false && selectedDay" class="day-details-panel">
@@ -288,184 +161,52 @@
     </div>
 
     
-    <!-- 제안 상세 모달 -->
-    <div v-if="showProposalModal" class="modal-overlay" @click="closeProposalModal">
-      <div class="modal-content proposal-modal" @click.stop>
-        <div class="modal-header">
-          <h3>점심 제안</h3>
-          <button class="close-btn" @click="closeProposalModal">×</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="selectedProposal" class="proposal-detail">
-            <!-- 제안 정보 -->
-            <div class="proposal-info-section">
-              <div class="restaurant-card">
-                <h4>{{ selectedProposal.restaurant.name }}</h4>
-                <p class="restaurant-details">
-                  {{ selectedProposal.restaurant.category }} • 
-                  ⭐ {{ selectedProposal.restaurant.rating }} • 
-                  🚶‍♂️ {{ selectedProposal.restaurant.distance }}분
-                </p>
-                <p class="price-range">{{ selectedProposal.restaurant.priceRange }}</p>
-              </div>
-              <div class="proposer-info">
-                <span class="proposer-label">제안자:</span>
-                <span class="proposer-name">{{ selectedProposal.proposer.name }}</span>
-              </div>
-            </div>
-            
-            <!-- 투표 현황 -->
-            <div class="voting-section">
-              <h4>투표 현황</h4>
-              <div class="vote-status">
-                <div class="vote-item accepted">
-                  <span class="vote-label">수락</span>
-                  <span class="vote-count">{{ selectedProposal.votes.accepted.length }}명</span>
-                  <div class="vote-members">
-                    <span 
-                      v-for="userId in selectedProposal.votes.accepted" 
-                      :key="userId"
-                      class="member-badge"
-                    >
-                      {{ actualMembers.find(m => m.id === userId)?.name || '알 수 없음' }}
-                    </span>
-                  </div>
-                </div>
-                <div class="vote-item rejected">
-                  <span class="vote-label">거부</span>
-                  <span class="vote-count">{{ selectedProposal.votes.rejected.length }}명</span>
-                  <div class="vote-members">
-                    <span 
-                      v-for="userId in selectedProposal.votes.rejected" 
-                      :key="userId"
-                      class="member-badge"
-                    >
-                      {{ actualMembers.find(m => m.id === userId)?.name || '알 수 없음' }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 투표 결과 또는 투표 버튼 -->
-            <div v-if="getProposalStatus(selectedProposal) === 'confirmed'" class="confirmation-banner">
-              <div class="confirmation-icon">🎉</div>
-              <div class="confirmation-text">
-                <h4>확정되었습니다!</h4>
-                <p>{{ selectedProposal.restaurant.name }}에서 점심을 먹어요.</p>
-              </div>
-            </div>
-            
-            <div v-else-if="getProposalStatus(selectedProposal) === 'rejected'" class="rejection-banner">
-              <div class="rejection-icon">❌</div>
-              <div class="rejection-text">
-                <h4>거부되었습니다</h4>
-                <p>다른 음식점을 제안해 보세요.</p>
-              </div>
-            </div>
-            
-            <div v-else class="voting-actions">
-              <button 
-                class="vote-btn accept" 
-                @click="voteProposal(selectedProposal.id, 'accept')"
-                :disabled="selectedProposal.votes.accepted.includes(currentUser?.uid || currentUser?.id)"
-              >
-                👍 수락
-              </button>
-              <button 
-                class="vote-btn reject" 
-                @click="voteProposal(selectedProposal.id, 'reject')"
-                :disabled="selectedProposal.votes.rejected.includes(currentUser?.uid || currentUser?.id)"
-              >
-                👎 거부
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 제안 시스템 모달 -->
+    <ProposalSystem
+      :show="showProposalModal"
+      :selected-proposal="selectedProposal"
+      :proposals="proposals"
+      :actual-members="actualMembers"
+      :current-user="currentUser"
+      @close="closeProposalModal"
+      @vote="handleProposalVote"
+      @proposal-confirmed="handleProposalConfirmed"
+    />
+    
+    <!-- 드래그앤드롭 핸들러 -->
+    <DragDropHandler
+      :proposals="proposals"
+      :actual-members="actualMembers"
+      :current-user="currentUser"
+      @proposal-moved="handleProposalMoved"
+      @drag-start="handleDragStart"
+      @drag-end="handleDragEnd"
+    />
 
     <!-- 음식점 상세 모달 -->
-    <div v-if="showRestaurantDetailModal" class="modal-overlay" @click="closeRestaurantDetailModal">
-      <div class="modal-content restaurant-detail-modal" @click.stop>
-        <div class="modal-header">
-          <h3>🍽️ {{ selectedRestaurantDetail?.name }}</h3>
-          <button @click="closeRestaurantDetailModal" class="close-btn">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="restaurant-detail-info">
-            <div class="detail-section">
-              <h4>📅 {{ formatSelectedDate(selectedRestaurantDate) }} 선택 현황</h4>
-              <div class="selected-members">
-                <div 
-                  v-for="member in getRestaurantMembers(selectedRestaurantDetail?.name, selectedRestaurantDate)" 
-                  :key="member.id"
-                  class="member-card"
-                >
-                  <div class="member-avatar" :style="{ backgroundColor: member.color }">
-                    {{ member.name.charAt(0) }}
-                  </div>
-                  <div class="member-info">
-                    <span class="member-name">{{ member.name }}</span>
-                    <span class="selection-time">{{ member.selectionTime }}</span>
-                  </div>
-                  <div class="member-actions">
-                    <button 
-                      v-if="canEditMember(member.id)"
-                      @click="editMemberFromModal(member.id)"
-                      class="edit-btn"
-                      title="수정"
-                    >
-                      ✏️
-                    </button>
-                    <button 
-                      v-if="canEditMember(member.id)"
-                      @click="cancelMemberFromModal(member.id)"
-                      class="cancel-btn"
-                      title="취소"
-                    >
-                      ❌
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div class="detail-section">
-              <h4>📊 통계 정보</h4>
-              <div class="stats-grid">
-                <div class="stat-item">
-                  <span class="stat-label">이번달 선택</span>
-                  <span class="stat-value">{{ restaurantStats.monthlyCount }}회</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">총 방문</span>
-                  <span class="stat-value">{{ restaurantStats.totalCount }}회</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="modal-footer">
-          <button @click="closeRestaurantDetailModal" class="btn-secondary">닫기</button>
-          <button 
-            v-if="!currentUserSelectedThisRestaurant(selectedRestaurantDetail?.name, selectedRestaurantDate)"
-            @click="selectThisRestaurant"
-            class="btn-primary"
-          >
-            나도 선택하기
-          </button>
-        </div>
-      </div>
-    </div>
+    <RestaurantDetailModal
+      :show="showRestaurantDetailModal"
+      :restaurant="selectedRestaurantDetail"
+      :date="selectedRestaurantDate"
+      :restaurant-members="getRestaurantMembers(selectedRestaurantDetail?.name, selectedRestaurantDate)"
+      :stats="restaurantStats"
+      :current-user="currentUser"
+      @close="closeRestaurantDetailModal"
+      @edit-member="editMemberFromModal"
+      @cancel-member="cancelMemberFromModal"
+      @select-restaurant="selectThisRestaurant"
+    />
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { gsap } from 'gsap';
+import CalendarGrid from './CalendarGrid.vue';
+import RestaurantDetailModal from './RestaurantDetailModal.vue';
+import ProposalSystem from './ProposalSystem.vue';
+import DragDropHandler from './DragDropHandler.vue';
+import { HolidayUtils } from '@/config/constants.js';
 import { 
   saveMemberStatus, 
   getMemberStatus, 
@@ -484,7 +225,12 @@ import {
 import { getCurrentUser } from '@/services/firebaseAuth.js';
 
 export default {
-  components: { },
+  components: { 
+    CalendarGrid,
+    RestaurantDetailModal,
+    ProposalSystem,
+    DragDropHandler
+  },
   props: {
     groupId: {
       type: String,
@@ -497,18 +243,177 @@ export default {
   },
   emits: ['date-selected', 'group-loaded', 'open-status-modal', 'status-updated'],
   setup(props, { emit }) {
+    // useCalendar composable 사용하지 않음 (모든 로직을 로컬에서 처리)
     
-    // 현재 날짜
+    // 추가 상태
+    const currentUser = ref(null);
+    const showProposalModal = ref(false);
+    
+    // 캘린더 상태
     const currentDate = ref(new Date());
     const selectedDay = ref(null);
-    
-    // 실제 멤버 정보를 저장할 ref
-    const actualMembers = ref([]);
-    const currentUser = ref(null);
     const memberStatuses = ref({});
-    const loading = ref(false);
+    const actualMembers = ref([]);
+    const restaurants = ref([]);
     const proposals = ref([]);
-    const showProposalModal = ref(false);
+    const loading = ref(false);
+    
+    // 계산된 속성
+    const currentMonthText = computed(() => {
+      const year = currentDate.value.getFullYear();
+      const month = currentDate.value.getMonth() + 1;
+      return `${year}년 ${month}월`;
+    });
+
+    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+    
+    // 공휴일 및 주말 확인 함수
+    const isHoliday = (dateStr) => {
+      return HolidayUtils.isHoliday(dateStr);
+    };
+
+    const isWeekendOrHoliday = (dateStr, dayOfWeek) => {
+      return HolidayUtils.isWeekendOrHoliday(dateStr, dayOfWeek);
+    };
+
+    // 포맷팅 함수들
+    const formatSelectedDate = (dateStr) => {
+      const date = new Date(dateStr);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      return `${month}월 ${day}일`;
+    };
+
+    const getDayOfWeek = (dateStr) => {
+      const date = new Date(dateStr);
+      return weekdays[date.getDay()];
+    };
+
+    // 이벤트 관련 함수들
+    const getDayEvents = (date) => {
+      // TODO: Firebase 이벤트 연동 시 교체
+      return [];
+    };
+
+    const getDayMemo = (date) => {
+      // TODO: Firebase 메모 연동 시 교체
+      return '';
+    };
+
+    const getEventIcon = (type) => {
+      const icons = {
+        'meal': '🍽️',
+        'vacation': '🏖️',
+        'other': '📅'
+      };
+      return icons[type] || '📝';
+    };
+    
+    // 캘린더 날짜 생성
+    const calendarDays = computed(() => {
+      const year = currentDate.value.getFullYear();
+      const month = currentDate.value.getMonth();
+      
+      // 이번 달의 첫째 날과 마지막 날
+      const firstDay = new Date(year, month, 1);
+      const lastDay = new Date(year, month + 1, 0);
+      
+      // 이번 달의 첫째 날이 시작하는 요일 (0=일요일)
+      const startDay = firstDay.getDay();
+      
+      // 이번 달의 마지막 날
+      const lastDate = lastDay.getDate();
+      
+      const days = [];
+      
+      // 이전 달의 마지막 날들 (빈 칸 채우기)
+      const prevMonth = new Date(year, month - 1, 0);
+      for (let i = startDay - 1; i >= 0; i--) {
+        const date = new Date(year, month - 1, prevMonth.getDate() - i);
+        days.push(createDayObject(date, true));
+      }
+      
+      // 이번 달의 모든 날들
+      for (let date = 1; date <= lastDate; date++) {
+        const dayDate = new Date(year, month, date);
+        days.push(createDayObject(dayDate, false));
+      }
+      
+      // 다음 달의 첫째 날들 (빈 칸 채우기)
+      const remainingDays = 42 - days.length; // 6주 * 7일 = 42일
+      for (let date = 1; date <= remainingDays; date++) {
+        const dayDate = new Date(year, month + 1, date);
+        days.push(createDayObject(dayDate, true));
+      }
+      
+      return days;
+    });
+
+    // 날짜 객체 생성
+    const createDayObject = (date, isOtherMonth) => {
+      const dateStr = date.toISOString().split('T')[0];
+      const dayOfWeek = date.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const isHolidayDate = isHoliday(dateStr);
+      const isWeekendOrHolidayDate = isWeekendOrHoliday(dateStr, dayOfWeek);
+      const isToday = isTodayDate(date);
+      
+      return {
+        date: dateStr,
+        day: date.getDate(),
+        isOtherMonth,
+        isCurrentMonth: !isOtherMonth,
+        isWeekend,
+        isHoliday: isHolidayDate,
+        isWeekendOrHoliday: isWeekendOrHolidayDate,
+        isToday,
+        events: getDayEvents(dateStr),
+        memo: getDayMemo(dateStr),
+        availableMembers: actualMembers.value.map(m => m.id)
+      };
+    };
+
+    // 오늘 날짜 확인
+    const isTodayDate = (date) => {
+      const today = new Date();
+      return date.getFullYear() === today.getFullYear() &&
+             date.getMonth() === today.getMonth() &&
+             date.getDate() === today.getDate();
+    };
+    
+    // 편집 관련 ref (모달은 부모에서 처리)
+    const editingMember = ref(null);
+    const editingDate = ref('');
+    const editingStatus = ref('');
+
+    // 멤버 상태 로드
+    const loadMemberStatuses = async () => {
+      try {
+        if (!props.groupId) {
+          console.warn('그룹 ID가 없어서 멤버 상태를 로드할 수 없습니다.');
+          return;
+        }
+
+        const statuses = await getGroupMemberStatuses(props.groupId);
+        memberStatuses.value = statuses || {};
+        console.log('멤버 상태 로드 완료:', Object.keys(memberStatuses.value).length, '일');
+      } catch (error) {
+        console.error('멤버 상태 로드 실패:', error);
+        memberStatuses.value = {};
+      }
+    };
+
+    // 음식점 목록 로드
+    const loadRestaurants = async () => {
+      try {
+        const restaurantList = await getAllRestaurants(200);
+        restaurants.value = restaurantList.map(r => r.name);
+        console.log('음식점 목록 로드 완료:', restaurants.value.length);
+      } catch (error) {
+        console.error('음식점 목록 로드 실패:', error);
+        restaurants.value = [];
+      }
+    };
 
     // 멤버 이름 로드 함수
     const loadMemberNames = async () => {
@@ -584,9 +489,7 @@ export default {
       totalCount: 0
     });
     
-    // 드래그 앤 드롭 관련
-    const draggingProposal = ref(null);
-    const dragOverDay = ref(null);
+    // 드래그앤드롭은 DragDropHandler에서 관리
     
     // 애니메이션 관련
     const calendarRef = ref(null);
@@ -620,11 +523,7 @@ export default {
       description: ''
     });
     
-    // 요일 배열
-    const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-    
-    // 음식점 목록 (Firebase에서 로드)
-    const restaurants = ref([]);
+    // 음식점 관련 로컬 상태
     const dropdownOpen = ref(false);
     const filteredRestaurants = computed(() => {
       const q = (mealDetails.value.restaurant || '').toLowerCase();
@@ -642,56 +541,11 @@ export default {
         dropdownOpen.value = false;
       }, 150);
     };
-
-    // 음식점 목록 로드
-    const loadRestaurants = async () => {
-      try {
-        const restaurantList = await getAllRestaurants(200);
-        restaurants.value = restaurantList.map(r => r.name);
-        console.log('음식점 목록 로드 완료:', restaurants.value.length);
-      } catch (error) {
-        console.error('음식점 목록 로드 실패:', error);
-        restaurants.value = [];
-      }
-    };
     
     // 선택된 음식점
     const selectedRestaurant = ref('');
     
-    // 한국 공휴일 목록 (2025년)
-    const holidays = ref([
-      '2025-01-01', // 신정
-      '2025-01-28', // 설날 연휴
-      '2025-01-29', // 설날
-      '2025-01-30', // 설날 연휴
-      '2025-03-01', // 삼일절
-      '2025-05-05', // 어린이날
-      '2025-05-12', // 부처님오신날
-      '2025-06-06', // 현충일
-      '2025-08-15', // 광복절
-      '2025-10-05', // 추석 연휴
-      '2025-10-06', // 추석
-      '2025-10-07', // 추석 연휴
-      '2025-10-08', // 추석 대체휴일
-      '2025-10-03', // 개천절
-      '2025-10-09', // 한글날
-      '2025-12-25'  // 성탄절
-    ]);
-    
-    // 공휴일인지 확인
-    const isHoliday = (dateStr) => {
-      return holidays.value.includes(dateStr);
-    };
-    
-    // 주말 또는 공휴일인지 확인
-    const isWeekendOrHoliday = (dateStr, dayOfWeek) => {
-      // 2025년 9월 8일은 특별히 평일로 처리
-      if (dateStr === '2025-09-08') return false;
-      
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // 일요일=0, 토요일=6
-      const isHolidayDate = isHoliday(dateStr);
-      return isWeekend || isHolidayDate;
-    };
+    // 공휴일 및 주말 확인은 useCalendar에서 처리
     
     // 가능한 멤버들 가져오기
     const getAvailableMembers = (date) => {
@@ -702,112 +556,24 @@ export default {
         .map(([memberId]) => memberId);
     };
     
-    // 현재 월 텍스트
-    const currentMonthText = computed(() => {
-      const year = currentDate.value.getFullYear();
-      const month = currentDate.value.getMonth() + 1;
-      return `${year}년 ${month}월`;
-    });
+    // 중복된 calendarDays 함수 제거됨
     
-    // 캘린더 날짜 배열 (주말 비활성화)
-    const calendarDays = computed(() => {
-      const year = currentDate.value.getFullYear();
-      const month = currentDate.value.getMonth();
-      const today = new Date();
-      
-      // 이번 달 첫째 날
-      const firstDay = new Date(year, month, 1);
-      const lastDay = new Date(year, month + 1, 0);
-      
-      // 이번 달 첫째 날의 요일 (0=일요일)
-      const firstDayWeekday = firstDay.getDay();
-      
-      // 이전 달 마지막 날들
-      const prevMonth = new Date(year, month, 0);
-      const prevMonthDays = [];
-      for (let i = firstDayWeekday - 1; i >= 0; i--) {
-        const dayDate = new Date(year, month, -i);
-        const dayOfWeek = dayDate.getDay();
-        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(dayDate.getDate()).padStart(2, '0')}`;
-        const isWeekendOrHolidayDate = isWeekendOrHoliday(dateStr, dayOfWeek);
-        
-        prevMonthDays.push({
-          dayNumber: dayDate.getDate(),
-          date: dateStr,
-          isCurrentMonth: false,
-          isToday: false,
-          isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
-          isHoliday: isHoliday(dateStr),
-          isWeekendOrHoliday: isWeekendOrHolidayDate,
-          events: [],
-          memo: '',
-          availableMembers: isWeekendOrHolidayDate ? [] : getAvailableMembers(dateStr)
-        });
-      }
-      
-      // 이번 달 날짜들
-      const currentMonthDays = [];
-      for (let day = 1; day <= lastDay.getDate(); day++) {
-        const dayDate = new Date(year, month, day);
-        const dayOfWeek = dayDate.getDay();
-        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const isWeekendOrHolidayDate = isWeekendOrHoliday(dateStr, dayOfWeek);
-        const isToday = year === today.getFullYear() && 
-                      month === today.getMonth() && 
-                      day === today.getDate();
-        
-        currentMonthDays.push({
-          dayNumber: day,
-          date: dateStr,
-          isCurrentMonth: true,
-          isToday,
-          isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
-          isHoliday: isHoliday(dateStr),
-          isWeekendOrHoliday: isWeekendOrHolidayDate,
-          events: getDayEvents(dateStr),
-          memo: getDayMemo(dateStr),
-          availableMembers: isWeekendOrHolidayDate ? [] : getAvailableMembers(dateStr)
-        });
-      }
-      
-      // 다음 달 첫째 날들 (캘린더 완성용)
-      const nextMonthDays = [];
-      const remainingCells = 42 - (prevMonthDays.length + currentMonthDays.length);
-      for (let day = 1; day <= remainingCells; day++) {
-        const dayDate = new Date(year, month + 1, day);
-        const dayOfWeek = dayDate.getDay();
-        const dateStr = `${year}-${String(month + 2).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        const isWeekendOrHolidayDate = isWeekendOrHoliday(dateStr, dayOfWeek);
-        
-        nextMonthDays.push({
-          dayNumber: day,
-          date: dateStr,
-          isCurrentMonth: false,
-          isToday: false,
-          isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
-          isHoliday: isHoliday(dateStr),
-          isWeekendOrHoliday: isWeekendOrHolidayDate,
-          events: [],
-          memo: '',
-          availableMembers: isWeekendOrHolidayDate ? [] : getAvailableMembers(dateStr)
-        });
-      }
-      
-      return [...prevMonthDays, ...currentMonthDays, ...nextMonthDays];
-    });
-    
-    // 멤버 상태 클래스 가져오기
+    // 멤버 상태 관련 함수들
     const getMemberStatusClass = (day, memberId) => {
       const memberStatus = getMemberStatusFromData(day, memberId);
-      return {
-        'status-available': memberStatus === 'available',
-        'status-meal': memberStatus === 'meal',
-        'status-vacation': memberStatus === 'vacation',
-        'status-other': memberStatus === 'other'
+      if (!memberStatus) return '';
+      
+      const statusClasses = {
+        'available': 'status-available',
+        'vacation': 'status-vacation',
+        'solo': 'status-solo',
+        'skip': 'status-skip',
+        'other': 'status-other'
       };
+      
+      return statusClasses[memberStatus] || '';
     };
-    
-    // 멤버 상태 텍스트 가져오기
+
     const getMemberStatusText = (day, memberId) => {
       const memberStatus = getMemberStatusFromData(day, memberId);
       const statusTexts = {
@@ -819,7 +585,6 @@ export default {
       return statusTexts[memberStatus] || '미정';
     };
 
-    // 멤버가 선택한 음식점 가져오기
     const getMemberRestaurant = (day, memberId) => {
       const memberStatus = memberStatuses.value[day.date]?.[memberId];
       if (memberStatus?.status === 'available' && memberStatus?.details?.restaurant) {
@@ -828,88 +593,70 @@ export default {
       return null;
     };
 
-    // 멤버 상태 가져오기 (상태 취소 버튼을 위해)
     const getMemberStatus = (day, memberId) => {
       return memberStatuses.value[day.date]?.[memberId]?.status || '';
     };
 
-    // 날짜별 선택된 음식점들 가져오기 (캘린더 표시용)
-    const getSelectedRestaurantsForDay = (date) => {
-      const dayStatuses = memberStatuses.value[date] || {};
-      const restaurantCount = {};
-      
-      Object.values(dayStatuses).forEach(status => {
-        if (status.status === 'available' && status.details?.restaurant) {
-          const restaurant = status.details.restaurant;
-          restaurantCount[restaurant] = (restaurantCount[restaurant] || 0) + 1;
-        }
-      });
-      
-      return Object.entries(restaurantCount).map(([name, count]) => ({
-        name,
-        count
-      }));
-    };
-    
-    // 멤버 상태 가져오기 (Firebase에서 실제 데이터)
     const getMemberStatusFromData = (day, memberId) => {
       return memberStatuses.value[day.date]?.[memberId]?.status || 'available';
     };
     
-    // 날짜별 이벤트 가져오기
-    const getDayEvents = (date) => {
-      // TODO: Firebase 이벤트 연동 시 교체. 현재는 비어 있음
-      return [];
-    };
+    // 이벤트 관련 함수들은 useCalendar에서 처리
     
-    // 날짜별 메모 가져오기
-    const getDayMemo = (date) => {
-      // TODO: Firebase 메모 연동 시 교체. 현재는 비어 있음
-      return '';
-    };
-    
-    // 이벤트 아이콘 가져오기
-    const getEventIcon = (type) => {
-      const icons = {
-        'meal': '🍽️',
-        'vacation': '🏖️',
-        'other': '📅'
-      };
-      return icons[type] || '📝';
-    };
-    
-    // 이전 달
+    // 월 이동 함수들
     const prevMonth = async () => {
       await animateCalendarTransition('prev');
       currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() - 1, 1);
     };
     
-    // 다음 달
     const nextMonth = async () => {
       await animateCalendarTransition('next');
       currentDate.value = new Date(currentDate.value.getFullYear(), currentDate.value.getMonth() + 1, 1);
     };
     
+    // 날짜 선택
+    const selectDay = (day) => {
+      selectedDay.value = day;
+    };
+
+    // 상세 정보 닫기
+    const closeDetails = () => {
+      selectedDay.value = null;
+    };
+
     // 날짜 클릭 핸들러
     const handleDayClick = (day) => {
       if (!day.isWeekendOrHoliday) {
-        selectDay(day);
+        handleSelectDay(day);
       }
     };
 
-    // 날짜 선택
-    const selectDay = async (day) => {
-      selectedDay.value = day;
+    // 날짜 선택은 useCalendar에서 처리하되, 모달 로직은 여기서 처리
+    const handleSelectDay = async (day) => {
+      selectDay(day);
       
       // 현재 사용자 정보 준비
       const currentMember = actualMembers.value.find(m => m.id === (currentUser.value?.uid || currentUser.value?.id))
         || { id: currentUser.value?.uid || currentUser.value?.id, name: currentUser.value?.name || '나' };
       
+      // 현재 상태 확인
+      const currentStatus = memberStatuses.value[day.date]?.[currentMember.id]?.status || 'available';
+      const currentDetails = memberStatuses.value[day.date]?.[currentMember.id]?.details || {};
+      
+      console.log('🔍 날짜 선택:', {
+        date: day.date,
+        currentMember,
+        currentStatus,
+        currentDetails,
+        memberStatuses: memberStatuses.value[day.date]
+      });
+      
       // 모달 데이터 준비
       const modalData = {
         member: currentMember,
         date: day.date,
-        currentStatus: memberStatuses.value[day.date]?.[currentMember.id]?.status || '',
+        currentStatus,
+        details: currentDetails,
         allMembers: actualMembers.value,
         memberStatuses: memberStatuses.value,
         restaurants: restaurants.value,
@@ -918,14 +665,6 @@ export default {
       
       // 부모 컴포넌트에 모달 오픈 이벤트 전달
       emit('open-status-modal', modalData);
-      
-      // 부모 컴포넌트에 날짜 선택 이벤트 전달
-      emit('date-selected', day.date);
-    };
-    
-    // 상세 정보 닫기
-    const closeDetails = () => {
-      selectedDay.value = null;
     };
     
     // 멤버 상태 편집
@@ -960,12 +699,23 @@ export default {
         otherDetails.value = { description: '' };
       }
       
-      showStatusModal.value = true;
+      // 모달 데이터 준비
+      const modalData = {
+        member: editingMember.value,
+        date: date,
+        currentStatus: editingStatus.value,
+        allMembers: actualMembers.value,
+        memberStatuses: memberStatuses.value,
+        restaurants: restaurants.value,
+        groupId: props.groupId
+      };
+      
+      // 모달은 부모 컴포넌트에서 처리하므로 이벤트만 emit
+      emit('open-status-modal', modalData);
     };
     
-    // 상태 모달 닫기
-    const closeStatusModal = () => {
-      showStatusModal.value = false;
+    // 편집 상태 초기화
+    const resetEditingState = () => {
       editingMember.value = null;
       editingDate.value = '';
       editingStatus.value = '';
@@ -978,13 +728,21 @@ export default {
       try {
         let details = {};
         
-        // 상태별 상세 정보 수집
-        if (editingStatus.value === 'available') {
-          details = {
-            restaurant: mealDetails.value.restaurant,
-            menu: mealDetails.value.menu,
-            participants: mealDetails.value.participants
-          };
+          // 상태별 상세 정보 수집
+          if (editingStatus.value === 'available') {
+            // 다중 기록을 위한 고유 ID 생성 (날짜 + 멤버ID + 타임스탬프)
+            const groupId = `${editingDate.value}_${editingMember.value.id}_${Date.now()}`;
+            
+            details = {
+              restaurant: mealDetails.value.restaurant,
+              menu: mealDetails.value.menu,
+              participants: mealDetails.value.participants,
+              mealCard: mealDetails.value.mealCard,
+              cash: mealDetails.value.cash,
+              mealType: mealDetails.value.mealType || 'lunch',
+              groupId: groupId,
+              externalMembers: mealDetails.value.externalMembers || 0
+            };
           
           // 음식점 제안이 있으면 제안 생성
           if (mealDetails.value.restaurant) {
@@ -1054,11 +812,13 @@ export default {
           closeStatusModal();
         } else {
           console.error('❌ 상태 저장 실패');
-          alert('상태 저장에 실패했습니다.');
+          // alert 대신 콘솔 로그만 출력
+          console.warn('상태 저장에 실패했습니다.');
         }
       } catch (error) {
         console.error('상태 저장 실패:', error);
-        alert('상태 저장 중 오류가 발생했습니다.');
+        // alert 대신 콘솔 로그만 출력
+        console.warn('상태 저장 중 오류가 발생했습니다.');
       }
     };
     
@@ -1107,11 +867,13 @@ export default {
           selectedRestaurant.value = null;
         } else {
           console.error('❌ 상태 취소 실패');
-          alert('상태 취소에 실패했습니다.');
+          // alert 대신 콘솔 로그만 출력
+          console.warn('상태 취소에 실패했습니다.');
         }
       } catch (error) {
         console.error('상태 취소 실패:', error);
-        alert('상태 취소 중 오류가 발생했습니다.');
+        // alert 대신 콘솔 로그만 출력
+        console.warn('상태 취소 중 오류가 발생했습니다.');
       }
     };
 
@@ -1159,10 +921,9 @@ export default {
 
     // 모든 음식점 모달 열기 (3개 이상일 때)
     const openAllRestaurantsModal = (date) => {
-      const restaurants = getSelectedRestaurantsForDay(date);
-      if (restaurants.length > 0) {
-        openRestaurantDetailModal(restaurants[0], date);
-      }
+      // CalendarGrid에서 전달받은 이벤트로 처리
+      // 실제 구현은 CalendarGrid에서 처리됨
+      console.log('모든 음식점 모달 열기:', date);
     };
 
     // 해당 음식점을 선택한 멤버들 가져오기
@@ -1170,18 +931,38 @@ export default {
       const dayStatuses = memberStatuses.value[date] || {};
       const members = [];
       
+      console.log('🔍 getRestaurantMembers 호출:', { restaurantName, date, dayStatuses });
+      
       Object.entries(dayStatuses).forEach(([memberId, status]) => {
+        console.log('🔍 멤버 상태 확인:', { memberId, status, restaurantName });
+        
         if (status.status === 'available' && status.details?.restaurant === restaurantName) {
           const member = actualMembers.value.find(m => m.id === memberId);
           if (member) {
-            members.push({
-              ...member,
-              selectionTime: status.createdAt ? new Date(status.createdAt.seconds * 1000).toLocaleTimeString() : '시간 불명'
+            // 함께 밥을 먹은 동료들 정보 추가
+            const participants = status.details?.participants || [];
+            const participantNames = participants.map(pid => {
+              const p = actualMembers.value.find(m => m.id === pid);
+              return p ? p.name : '알 수 없음';
             });
+            
+            const memberData = {
+              ...member,
+              selectionTime: status.createdAt ? new Date(status.createdAt.seconds * 1000).toLocaleTimeString() : '시간 불명',
+              participants: participantNames,
+              mealCard: status.details?.mealCard || null, // 식권 금액
+              cash: status.details?.cash || null, // 현금 금액
+              totalAmount: (status.details?.mealCard || 0) + (status.details?.cash || 0),
+              externalMembers: status.details?.externalMembers || 0 // 외부인원 수
+            };
+            
+            console.log('✅ 멤버 데이터 생성:', memberData);
+            members.push(memberData);
           }
         }
       });
       
+      console.log('🔍 최종 멤버 목록:', members);
       return members;
     };
 
@@ -1190,11 +971,7 @@ export default {
       return currentUser.value?.uid === memberId || currentUser.value?.id === memberId;
     };
 
-    // 현재 사용자가 해당 음식점을 선택했는지 확인
-    const currentUserSelectedThisRestaurant = (restaurantName, date) => {
-      const userStatus = memberStatuses.value[date]?.[currentUser.value?.uid || currentUser.value?.id];
-      return userStatus?.status === 'available' && userStatus?.details?.restaurant === restaurantName;
-    };
+    // 이 함수는 RestaurantDetailModal 컴포넌트로 이동됨
 
     // 모달에서 멤버 편집
     const editMemberFromModal = (memberId) => {
@@ -1211,13 +988,24 @@ export default {
     // 이 음식점 선택하기
     const selectThisRestaurant = () => {
       closeRestaurantDetailModal();
-      selectDay(selectedRestaurantDate.value);
+      
       // 음식점이 이미 선택된 상태로 모달 열기
-      setTimeout(() => {
-        mealDetails.value.restaurant = selectedRestaurantDetail.value?.name || '';
-        editingStatus.value = 'available';
-        showStatusModal.value = true;
-      }, 100);
+      const currentMember = actualMembers.value.find(m => m.id === (currentUser.value?.uid || currentUser.value?.id))
+        || { id: currentUser.value?.uid || currentUser.value?.id, name: currentUser.value?.name || '나' };
+      
+      const modalData = {
+        member: currentMember,
+        date: selectedRestaurantDate.value,
+        currentStatus: 'available',
+        allMembers: actualMembers.value,
+        memberStatuses: memberStatuses.value,
+        restaurants: restaurants.value,
+        groupId: props.groupId,
+        preselectedRestaurant: selectedRestaurantDetail.value?.name || ''
+      };
+      
+      // 모달은 부모 컴포넌트에서 처리하므로 이벤트만 emit
+      emit('open-status-modal', modalData);
     };
 
     // Firebase 기반 음식점 월별 선택 횟수
@@ -1262,25 +1050,11 @@ export default {
       console.log('메모 저장:', selectedDay.value.date, selectedDay.value.memo);
     };
     
-    // 선택된 날짜 포맷팅
-    const formatSelectedDate = (dateStr) => {
-      const date = new Date(dateStr);
-      const month = date.getMonth() + 1;
-      const day = date.getDate();
-      return `${month}월 ${day}일`;
-    };
-    
-    // 요일 가져오기
-    const getDayOfWeek = (dateStr) => {
-      const date = new Date(dateStr);
-      const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
-      return days[date.getDay()];
-    };
+    // 포맷팅 함수들은 useCalendar에서 처리
     
     // 음식점 선택
     const selectRestaurant = (restaurant, date) => {
       selectedRestaurant.value = restaurant;
-      // 실제로는 API에 저장해야 함
       console.log('음식점 선택:', restaurant, '날짜:', date);
     };
 
@@ -1289,24 +1063,7 @@ export default {
       loadMemberStatuses();
     });
 
-    // 제안 관련 함수들
-    const getProposalsForDay = (date) => {
-      return proposals.value.filter(proposal => proposal.date === date);
-    };
-    
-    const getProposalStatus = (proposal) => {
-      const totalMembers = actualMembers.value.length;
-      const acceptedCount = proposal.votes.accepted.length;
-      const rejectedCount = proposal.votes.rejected.length;
-      
-      if (rejectedCount > 0) {
-        return 'rejected';
-      } else if (acceptedCount >= Math.ceil(totalMembers / 2)) { // 과반수 이상이면 확정
-        return 'confirmed';
-      } else {
-        return 'pending';
-      }
-    };
+    // 제안 관련 함수들은 useCalendar에서 처리
     
     // 제안 생성
     const createProposal = (date, restaurantName) => {
@@ -1337,48 +1094,17 @@ export default {
       console.log('새 제안 생성:', newProposal);
     };
 
-    // 확정된 메뉴 가져오기
-    const getConfirmedMealForDay = (date) => {
-      const confirmedProposal = proposals.value.find(p => 
-        p.date === date && getProposalStatus(p) === 'confirmed'
-      );
-      return confirmedProposal?.restaurant.name || null;
-    };
-
-    // 제안 아이콘 가져오기
-    const getProposalIcon = (proposal) => {
-      const status = getProposalStatus(proposal);
-      switch (status) {
-        case 'confirmed': return '✅';
-        case 'rejected': return '❌';
-        case 'pending': 
-        default: return '⏳';
-      }
+    // 확정된 메뉴 및 제안 아이콘은 useCalendar에서 처리
+    
+    // 제안 투표 처리 (ProposalSystem에서 호출)
+    const handleProposalVote = async ({ proposalId, vote, proposal }) => {
+      console.log('투표 처리:', { proposalId, vote });
+      // ProposalSystem에서 이미 투표 처리가 완료됨
     };
     
-    const voteProposal = async (proposalId, vote) => {
-      const proposal = proposals.value.find(p => p.id === proposalId);
-      if (!proposal) return;
-      
-      const userId = currentUser.value?.uid || currentUser.value?.id;
-      
-      // 기존 투표 제거
-      proposal.votes.accepted = proposal.votes.accepted.filter(id => id !== userId);
-      proposal.votes.rejected = proposal.votes.rejected.filter(id => id !== userId);
-      
-      // 새 투표 추가
-      if (vote === 'accept') {
-        proposal.votes.accepted.push(userId);
-      } else if (vote === 'reject') {
-        proposal.votes.rejected.push(userId);
-      }
-      
-      // 상태 업데이트
-      proposal.status = getProposalStatus(proposal);
-      
-      // 확정되었으면 알림 및 방문 기록 추가
-      if (proposal.status === 'confirmed') {
-        alert(`🎉 "${proposal.restaurant.name}" 확정되었습니다!`);
+    // 제안 확정 처리 (ProposalSystem에서 호출)
+    const handleProposalConfirmed = async (proposal) => {
+      console.log(`🎉 "${proposal.restaurant.name}" 확정되었습니다!`);
         
         // 방문 기록 추가
         try {
@@ -1392,9 +1118,6 @@ export default {
         } catch (error) {
           console.error('방문 기록 추가 실패:', error);
         }
-      }
-      
-      console.log('투표 완료:', proposal);
     };
     
     const openProposalModal = (proposal) => {
@@ -1408,50 +1131,21 @@ export default {
     };
     
     // 드래그 앤 드롭 함수들
-    const startDrag = (event, proposal) => {
-      draggingProposal.value = proposal;
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', proposal.id);
-      
-      // 드래그 중인 요소에 스타일 적용
-      event.target.style.opacity = '0.5';
-    };
-    
-    const endDrag = (event) => {
-      draggingProposal.value = null;
-      dragOverDay.value = null;
-      event.target.style.opacity = '1';
-    };
-    
-    const dropProposal = async (event, targetDate) => {
-      event.preventDefault();
-      
-      if (!draggingProposal.value) return;
-      
-      // 주말이나 공휴일에는 드롭 불가
-      const targetDay = calendarDays.value.find(day => day.date === targetDate);
-      if (targetDay?.isWeekendOrHoliday) {
-        alert('주말이나 공휴일에는 제안을 이동할 수 없습니다.');
-        return;
-      }
-      
-      // 드롭 애니메이션
-      const proposalElement = event.target.closest('.proposal-item');
-      const targetElement = document.querySelector(`[data-date="${targetDate}"]`);
-      
-      if (proposalElement && targetElement) {
-        await animateProposalMove(proposalElement, targetElement);
-      }
-      
-      // 제안 날짜 업데이트
-      const proposalIndex = proposals.value.findIndex(p => p.id === draggingProposal.value.id);
+    // 드래그앤드롭 이벤트 핸들러
+    const handleProposalMoved = ({ proposal, oldDate, newDate }) => {
+      const proposalIndex = proposals.value.findIndex(p => p.id === proposal.id);
       if (proposalIndex !== -1) {
-        proposals.value[proposalIndex].date = targetDate;
-        console.log(`제안이 ${targetDate}로 이동되었습니다.`);
+        proposals.value[proposalIndex] = proposal;
+        console.log(`제안이 ${oldDate}에서 ${newDate}로 이동되었습니다.`);
       }
-      
-      draggingProposal.value = null;
-      dragOverDay.value = null;
+    };
+    
+    const handleDragStart = (proposal) => {
+      console.log('드래그 시작:', proposal);
+    };
+    
+    const handleDragEnd = () => {
+      console.log('드래그 종료');
     };
     
     // 🎨 부드러운 캐러셀 스타일 월 전환 애니메이션
@@ -1595,12 +1289,26 @@ export default {
     };
 
     // 컴포넌트 마운트 시 초기화
+    // groupId 변경 감지
+    watch(() => props.groupId, async (newGroupId) => {
+      if (newGroupId) {
+        console.log('🔄 groupId 변경 감지:', newGroupId);
+        await loadMemberStatuses();
+        await loadMemberNames();
+        await loadRestaurants();
+      }
+    }, { immediate: true });
+
     onMounted(async () => {
       await loadCurrentUser();
       await loadGroupData();
-      await loadMemberStatuses();
-      await loadMemberNames();
-      await loadRestaurants();
+      
+      // groupId가 있으면 데이터 로드
+      if (props.groupId) {
+        await loadMemberStatuses();
+        await loadMemberNames();
+        await loadRestaurants();
+      }
       
       // 제안 데이터는 Firebase에서 가져오도록 수정 (현재는 빈 배열로 초기화)
       proposals.value = [];
@@ -1636,39 +1344,7 @@ export default {
       }
     };
 
-    // 멤버 상태들 로드
-    const loadMemberStatuses = async () => {
-      if (!props.groupId) {
-        console.warn('groupId가 없어서 멤버 상태 로드 불가');
-        return;
-      }
-      
-      loading.value = true;
-      try {
-        const year = currentDate.value.getFullYear();
-        const month = currentDate.value.getMonth();
-        
-        // 이번 달의 시작일과 끝일 계산
-        const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-        const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
-        
-        console.log('멤버 상태 로드 중:', { groupId: props.groupId, startDate, endDate });
-        
-        const result = await getGroupMemberStatuses(props.groupId, startDate, endDate);
-        console.log('멤버 상태 로드 결과:', result);
-        
-        if (result.success) {
-          memberStatuses.value = result.data;
-          console.log('✅ 멤버 상태 로드 성공:', Object.keys(result.data).length + '개 날짜');
-        } else {
-          console.error('❌ 멤버 상태 로드 실패:', result.error);
-        }
-      } catch (error) {
-        console.error('멤버 상태 로드 실패:', error);
-      } finally {
-        loading.value = false;
-      }
-    };
+    // 중복된 loadMemberStatuses 함수 제거됨
 
     // 멤버 상태 저장
     const saveMemberStatusToFirebase = async (userId, date, status, details = {}) => {
@@ -1680,6 +1356,8 @@ export default {
             memberStatuses.value[date] = {};
           }
           memberStatuses.value[date][userId] = { status, details };
+          console.log('✅ 로컬 상태 업데이트 완료:', { date, userId, status, details });
+          console.log('📊 현재 memberStatuses:', memberStatuses.value);
           return true;
         }
         return false;
@@ -1713,7 +1391,6 @@ export default {
       weekdays,
       restaurants,
       selectedRestaurant,
-      holidays,
       isHoliday,
       isWeekendOrHoliday,
       currentUser,
@@ -1733,18 +1410,14 @@ export default {
       getMemberStatusText,
       getMemberRestaurant,
       getMemberStatus,
-      getSelectedRestaurantsForDay,
       getEventIcon,
       formatSelectedDate,
       getDayOfWeek,
-      selectRestaurant,
-      getAvailableMembersForDay,
       openRestaurantModal,
-      getProposalsForDay,
-      getProposalStatus,
-      voteProposal,
       openProposalModal,
       closeProposalModal,
+      handleProposalVote,
+      handleProposalConfirmed,
       loadCurrentUser,
       loadMemberStatuses,
       saveMemberStatusToFirebase,
@@ -1754,6 +1427,19 @@ export default {
       handleDayClick,
       selectDay,
       closeDetails,
+      getMemberStatusClass,
+      getMemberStatusText,
+      getMemberRestaurant,
+      getMemberStatus,
+      selectRestaurant,
+      getAvailableMembersForDay,
+      isHoliday,
+      isWeekendOrHoliday,
+      formatSelectedDate,
+      getDayOfWeek,
+      getDayEvents,
+      getDayMemo,
+      getEventIcon,
       saveMemo,
       cancelMemberStatus,
       openRestaurantDetailModal,
@@ -1761,19 +1447,16 @@ export default {
       openAllRestaurantsModal,
       getRestaurantMembers,
       canEditMember,
-      currentUserSelectedThisRestaurant,
       editMemberFromModal,
       cancelMemberFromModal,
       selectThisRestaurant,
       getRestaurantMonthlyCount,
       getRestaurantTotalCount,
       loadRestaurantStats,
-      // 드래그 앤 드롭
-      draggingProposal,
-      dragOverDay,
-      startDrag,
-      endDrag,
-      dropProposal,
+      // 드래그앤드롭 이벤트 핸들러
+      handleProposalMoved,
+      handleDragStart,
+      handleDragEnd,
       // 애니메이션
       calendarRef,
       isAnimating,
@@ -1783,9 +1466,7 @@ export default {
       animateStatusChange,
       animatePanelSlide,
       // 제안 관리
-      createProposal,
-      getConfirmedMealForDay,
-      getProposalIcon
+      createProposal
     };
   }
 };
@@ -2981,6 +2662,65 @@ export default {
 .selection-time {
   font-size: 0.875rem;
   color: #6b7280;
+}
+
+/* 함께 밥을 먹은 동료들 정보 */
+.participants-info {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #f8fafc;
+  border-radius: 0.5rem;
+  border-left: 3px solid #3b82f6;
+}
+
+.participants-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  margin-right: 0.5rem;
+}
+
+.participants-list {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* 지출액 정보 */
+.expense-info {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #f0fdf4;
+  border-radius: 0.5rem;
+  border-left: 3px solid #10b981;
+}
+
+.expense-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  margin-right: 0.5rem;
+}
+
+.expense-amount {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #059669;
+}
+
+.expense-breakdown {
+  margin-top: 0.25rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.meal-card, .cash {
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid #e5e7eb;
 }
 
 .member-card .member-actions {

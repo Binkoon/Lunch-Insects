@@ -11,8 +11,7 @@ export const useRestaurant = () => {
   const loading = ref(false)
   const selectedCategory = ref('all')
   const searchQuery = ref('')
-  const selectedRestaurantDetail = ref(null)
-  const showRestaurantModal = ref(false)
+  const selectedRestaurant = ref(null)
 
   // 음식점 카테고리 정의
   const foodCategories = ref([
@@ -104,7 +103,40 @@ export const useRestaurant = () => {
       }
       
       const restaurantData = await getAllRestaurants(50)
-      restaurants.value = restaurantData
+      
+      // 바스버거 테스트 데이터 추가
+      const testRestaurants = [
+        {
+          id: 'test-basburger-1',
+          name: '바스버거',
+          branchName: '서소문시청역점',
+          fullName: '바스버거 서소문시청역점',
+          category: 'fastfood',
+          address: '서울 중구 다동길 5 광일빌딩 지하1층',
+          phone: '0507-1311-6653',
+          rating: 4.2,
+          priceRange: '보통',
+          distance: 250, // 한진빌딩에서 250m
+          walkingTime: 3, // 도보 3분
+          menu: [
+            { name: '바스버거세트', price: 12400, description: '바스버거 + 감자튀김 + 콜라' },
+            { name: '하와이안버거세트', price: 14400, description: '하와이안버거 + 감자튀김 + 콜라' },
+            { name: '베이컨버거', price: 10900, description: '베이컨이 들어간 버거' }
+          ],
+          features: ['와이파이', '주차', '단체석'],
+          openingHours: {
+            monday: '10:30 - 20:45',
+            tuesday: '10:30 - 20:45',
+            wednesday: '10:30 - 20:45',
+            thursday: '10:30 - 20:45',
+            friday: '10:30 - 20:45',
+            saturday: '10:30 - 20:45',
+            sunday: '10:30 - 20:45'
+          }
+        }
+      ]
+      
+      restaurants.value = [...(restaurantData || []), ...testRestaurants]
       
       if (import.meta.env.DEV) {
         console.log('음식점 데이터 로드 완료:', restaurantData.length, '개')
@@ -121,28 +153,6 @@ export const useRestaurant = () => {
     }
   }
 
-  // 음식점 상세보기
-  const viewDetails = async (restaurant) => {
-    try {
-      // 레스토랑 이름으로 상세(특히 menus, id)를 우선 보강
-      const dbRestaurant = await getAllRestaurants(1, restaurant.name)
-      if (dbRestaurant && dbRestaurant.length > 0) {
-        selectedRestaurantDetail.value = {
-          ...restaurant,
-          id: dbRestaurant[0].id,
-          menus: dbRestaurant[0].menus || dbRestaurant[0].menu || []
-        }
-      } else {
-        selectedRestaurantDetail.value = restaurant
-      }
-    } catch (e) {
-      console.warn('레스토랑 상세 조회 실패, 전달값으로 표시:', e)
-      selectedRestaurantDetail.value = restaurant
-    }
-    
-    // 모달 열기
-    showRestaurantModal.value = true
-  }
 
   // 카테고리 선택
   const selectCategory = (category) => {
@@ -156,13 +166,7 @@ export const useRestaurant = () => {
 
   // 음식점 선택
   const selectRestaurant = (restaurant) => {
-    selectedRestaurantDetail.value = restaurant
-  }
-
-  // 모달 닫기
-  const closeRestaurantModal = () => {
-    showRestaurantModal.value = false
-    selectedRestaurantDetail.value = null
+    selectedRestaurant.value = restaurant
   }
 
   return {
@@ -171,8 +175,7 @@ export const useRestaurant = () => {
     loading,
     selectedCategory,
     searchQuery,
-    selectedRestaurantDetail,
-    showRestaurantModal,
+    selectedRestaurant,
     foodCategories,
     
     // 계산된 속성
@@ -180,11 +183,9 @@ export const useRestaurant = () => {
     
     // 메서드
     loadRestaurants,
-    viewDetails,
     selectCategory,
     searchRestaurants,
     selectRestaurant,
-    closeRestaurantModal,
     getCategoryName,
     getRestaurantEmoji
   }

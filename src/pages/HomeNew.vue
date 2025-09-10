@@ -67,6 +67,7 @@
           </div>
           
           <GroupCalendar 
+            ref="groupCalendarRef"
             v-if="currentGroup && currentGroup.id"
             :groupId="currentGroup.id"
             :members="membersForCalendar"
@@ -119,27 +120,15 @@
           
           <!-- 음식점 필터 -->
           <div class="filter-section">
-            <div class="search-bar">
-              <input 
-                v-model="searchQuery"
-                type="text" 
-                placeholder="음식점 이름이나 메뉴를 검색하세요"
-                class="search-input"
-              />
-              <button class="search-btn" @click="searchRestaurants">
-                <i class="icon-search">🔍</i>
-              </button>
-          </div>
-          
             <div class="filter-tabs">
-            <button 
+              <button 
                 v-for="category in foodCategories" 
                 :key="category.id"
                 :class="['filter-tab', { active: selectedCategory === category.id }]"
                 @click="selectCategory(category.id)"
               >
                 {{ category.icon }} {{ category.name }}
-            </button>
+              </button>
             </div>
           </div>
           
@@ -151,8 +140,8 @@
               :class="['restaurant-item', { selected: selectedRestaurant?.id === restaurant.id }]"
               @click="selectRestaurant(restaurant)"
             >
-              <div class="restaurant-image">
-                <img :src="restaurant.image || '/api/placeholder/80/80'" :alt="restaurant.name" />
+              <div class="restaurant-emoji">
+                {{ getRestaurantEmoji(restaurant.name) }}
               </div>
               <div class="restaurant-info">
                 <h4 class="restaurant-name">{{ restaurant.name }}</h4>
@@ -163,15 +152,22 @@
                   <span class="price">{{ restaurant.priceRange }}</span>
                 </div>
               </div>
-              <div class="restaurant-actions">
-                <button class="action-btn" @click.stop="viewDetails(restaurant)">
-                  상세보기
-                </button>
-              </div>
             </div>
           </div>
         </section>
       </div>
+
+      <!-- 통합 지도 섹션 -->
+      <section class="map-section">
+        <div class="section-header">
+          <h2>🗺️ 주변 음식점 지도</h2>
+          <p class="section-subtitle">한진빌딩 주변 등록된 음식점들을 확인하세요</p>
+        </div>
+        <MainMap 
+          :restaurants="restaurants"
+          @restaurant-click="selectRestaurant"
+        />
+      </section>
 
       <!-- 소비금액 그래프 섹션 -->
       <ExpenseChart 
@@ -201,121 +197,6 @@
       </div>
     </div>
 
-    <!-- 음식점 상세보기 모달 -->
-    <div v-if="showRestaurantModal" class="modal-overlay" @click="closeRestaurantModal">
-      <div class="modal-content restaurant-detail-new" @click.stop>
-        <div class="modal-header">
-          <h3>🍽️ {{ selectedRestaurantDetail?.name }}</h3>
-          <button class="close-btn" @click="closeRestaurantModal">×</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="selectedRestaurantDetail" class="restaurant-detail-grid">
-            
-            <!-- 왼쪽: 기본 정보 & 메뉴 -->
-            <div class="restaurant-info-panel">
-              <!-- 기본 정보 -->
-              <div class="info-card">
-                <div class="restaurant-image-header">
-                  <div class="restaurant-emoji-image">
-                    {{ getRestaurantEmoji(selectedRestaurantDetail.name) }}
-                  </div>
-                  <div class="info-overlay">
-                    <div class="category-badge">{{ getCategoryName(selectedRestaurantDetail.category) }}</div>
-                    <div class="rating-info">
-                      <span class="rating">⭐ {{ selectedRestaurantDetail.rating }}</span>
-                      <span class="distance">🚶 {{ selectedRestaurantDetail.walkingTime }}분</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="restaurant-meta">
-                  <h4>📍 위치 정보</h4>
-                  <p class="address">{{ selectedRestaurantDetail.address || '주소 정보 준비 중...' }}</p>
-                  <p class="phone">📞 {{ selectedRestaurantDetail.phone || '전화번호 준비 중...' }}</p>
-                  <p class="hours">🕐 {{ selectedRestaurantDetail.hours || '영업시간 정보 준비 중...' }}</p>
-                </div>
-              </div>
-              
-              <!-- 메뉴판 -->
-              <div class="menu-card">
-                <h4>📋 메뉴 & 가격</h4>
-                <div class="menu-grid">
-                  <div 
-                    v-for="menu in (selectedRestaurantDetail.menus || selectedRestaurantDetail.menu || [])" 
-                    :key="menu.id || menu.name"
-                    class="menu-item-new"
-                  >
-                    <div class="menu-content">
-                      <div class="menu-name">{{ menu.name }}</div>
-                      <div class="menu-description" v-if="menu.description">{{ menu.description }}</div>
-                    </div>
-                    <div class="menu-price">{{ (menu.price || 0).toLocaleString() }}원</div>
-                  </div>
-                  
-                  <!-- 메뉴가 없는 경우 -->
-                  <div v-if="!selectedRestaurantDetail.menus?.length && !selectedRestaurantDetail.menu?.length" class="no-menu">
-                    <p>🍽️ 메뉴 정보를 준비 중입니다.</p>
-                    <p class="sub-text">곧 실제 메뉴와 가격을 확인하실 수 있습니다!</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 오른쪽: 지도 -->
-            <div class="map-panel">
-              <div class="map-card">
-                <h4>🗺️ 위치</h4>
-                <div class="map-container">
-                  <NaverMap 
-                    v-if="selectedRestaurantDetail?.location"
-                    :restaurant="selectedRestaurantDetail"
-                    :current-location="currentLocation"
-                    @distance-calculated="onDistanceCalculated"
-                  />
-                  <div v-else class="map-placeholder">
-                    <div class="map-icon">🗺️</div>
-                    <p>위치 정보가 없습니다</p>
-                    <p class="map-address">{{ selectedRestaurantDetail?.address || '주소 정보 없음' }}</p>
-                  </div>
-                </div>
-                
-                <!-- 길찾기 버튼들 -->
-                <div class="direction-buttons">
-                  <button class="direction-btn" @click="openNaverMap">
-                    <span class="btn-icon">🧭</span>
-                    네이버 지도로 보기
-                  </button>
-                  <button class="direction-btn" @click="openKakaoMap">
-                    <span class="btn-icon">🚶</span>
-                    카카오맵 길찾기
-                  </button>
-                </div>
-              </div>
-              
-              <!-- 추가 정보 -->
-              <div class="additional-info">
-                <div class="info-item">
-                  <span class="label">🕐 영업시간</span>
-                  <span class="value">{{ selectedRestaurantDetail.hours || '정보 없음' }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">💳 결제 방법</span>
-                  <span class="value">{{ selectedRestaurantDetail.payment || '카드, 현금 가능' }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">🚗 주차</span>
-                  <span class="value">{{ selectedRestaurantDetail.parking || '정보 없음' }}</span>
-                </div>
-              </div>
-            </div>
-            
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="closeRestaurantModal">닫기</button>
-        </div>
-      </div>
-    </div>
 
 
     <!-- 멤버 상태 편집 모달 (전체 화면 오버레이) -->
@@ -328,26 +209,20 @@
           </div>
           
           <div class="modal-body">
-            <!-- 다른 멤버들의 상태 표시 -->
+            <!-- 다른 멤버들의 상태 표시 (간단한 원형 표시) -->
             <div class="members-status-section">
               <h4 class="section-title">
                 👥 팀원들 상태
               </h4>
-              <div class="members-list">
+              <div class="members-status-dots">
                 <div 
                   v-for="member in modalData.allMembers" 
                   :key="member.id"
-                  class="member-item"
+                  class="member-status-dot"
                   :class="getMemberStatusClass(modalData.date, member.id)"
+                  :title="`${member.name}: ${getMemberStatusText(modalData.date, member.id)}`"
                 >
-                  <div class="member-avatar"
-                       :style="{ backgroundColor: member.color }">
-                    {{ member.name.charAt(0) }}
-                  </div>
-                  <div class="member-info">
-                    <div class="member-name">{{ member.name }}</div>
-                    <div class="member-status">{{ getMemberStatusText(modalData.date, member.id) }}</div>
-                  </div>
+                  <span class="member-name">{{ member.name }}</span>
                 </div>
               </div>
             </div>
@@ -378,6 +253,7 @@
             
             <!-- 가능 선택 시 방문 음식점 입력 -->
             <div v-if="editingStatus === 'available'" class="restaurant-visit-section">
+              <!-- 디버깅: {{ editingStatus }} -->
               <div class="restaurant-input-wrapper">
                 <label class="input-label">방문한 음식점</label>
                 <div class="restaurant-dropdown">
@@ -414,6 +290,100 @@
                   </div>
                 </div>
                 <div class="input-hint">목록에 없으면 그대로 입력하세요.</div>
+              </div>
+              
+              <!-- 점심/저녁 선택 -->
+              <div class="meal-type-section">
+                <label class="input-label">🍽️ 식사 시간</label>
+                <div class="meal-type-options">
+                  <label 
+                    v-for="mealType in mealTypeOptions" 
+                    :key="mealType.value"
+                    class="meal-type-option"
+                    :class="{ 'selected': mealDetails.mealType === mealType.value }"
+                    :style="{ '--meal-color': mealType.color }"
+                  >
+                    <input 
+                      type="radio" 
+                      :value="mealType.value" 
+                      v-model="mealDetails.mealType"
+                    />
+                    <span class="meal-type-icon">{{ mealType.icon }}</span>
+                    <span class="meal-type-label">{{ mealType.label }}</span>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- 함께 밥을 먹을 동료 선택 -->
+              <div class="participants-section">
+                <label class="input-label">👥 함께 밥을 먹을 동료</label>
+                <div class="participants-list">
+                  <div 
+                    v-for="member in modalData.allMembers" 
+                    :key="member.id"
+                    class="participant-item"
+                    :class="{ 'selected': isParticipantSelected(member.id) }"
+                    @click="toggleParticipant(member.id)"
+                  >
+                    <div class="participant-avatar" :style="{ backgroundColor: member.color }">
+                      {{ member.name.charAt(0) }}
+                    </div>
+                    <span class="participant-name">{{ member.name }}</span>
+                    <div class="participant-checkbox">
+                      <span v-if="isParticipantSelected(member.id)" class="check-icon">✓</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="input-hint">함께 밥을 먹을 동료를 선택하세요. (선택사항)</div>
+              </div>
+              
+              <!-- 지출액 입력 -->
+              <div class="expense-section">
+                <label class="input-label">💰 지출액 (선택사항)</label>
+                <div class="expense-inputs">
+                  <div class="expense-input-group">
+                    <label class="expense-label">식권</label>
+                    <input 
+                      type="number"
+                      v-model.number="mealDetails.mealCard"
+                      placeholder="0"
+                      class="expense-input"
+                      min="0"
+                    />
+                    <span class="expense-unit">원</span>
+                  </div>
+                  <div class="expense-input-group">
+                    <label class="expense-label">현금</label>
+                    <input 
+                      type="number"
+                      v-model.number="mealDetails.cash"
+                      placeholder="0"
+                      class="expense-input"
+                      min="0"
+                    />
+                    <span class="expense-unit">원</span>
+                  </div>
+                </div>
+                <div class="input-hint">식권과 현금 금액을 입력하세요. (선택사항)</div>
+                
+                <!-- 외부인원 수 입력 -->
+                <div class="external-members-section">
+                  <label class="input-label">👥 외부인원 수 (N빵 계산용)</label>
+                  <div class="external-members-input">
+                    <input 
+                      type="number"
+                      v-model.number="mealDetails.externalMembers"
+                      placeholder="0"
+                      class="expense-input"
+                      min="0"
+                      max="20"
+                    />
+                    <span class="expense-unit">명</span>
+                  </div>
+                  <div class="external-members-hint">
+                    💡 외부인원까지 포함한 총 인원으로 N빵 계산됩니다
+                  </div>
+                </div>
               </div>
             </div>
             
@@ -472,6 +442,7 @@ const GroupCalendar = defineAsyncComponent(() => import('@/components/Features/G
 const GroupManagement = defineAsyncComponent(() => import('@/components/Features/GroupManagement.vue'));
 const ExpenseChart = defineAsyncComponent(() => import('@/components/Features/ExpenseChart.vue'));
 const NaverMap = defineAsyncComponent(() => import('@/components/Features/NaverMap.vue'));
+const MainMap = defineAsyncComponent(() => import('@/components/Features/MainMap.vue'));
 import { getNearbyRestaurants, getRestaurantsByCategory, getAllRestaurants, getGroup, getUserMonthlyExpenses, getAllUsers, getUser, getUserGroups, getRestaurantByName, checkAndResetMonthlyExpenses, getGroupMembersMonthlyExpenses, updateUser } from '@/services/firebaseDBv2.js';
 import { getCurrentUser, onAuthStateChange } from '@/services/firebaseAuth.js';
 import { DEFAULT_LOCATION, DEFAULT_USER, DEFAULT_GROUP } from '@/config/constants.js';
@@ -481,7 +452,8 @@ export default {
     GroupCalendar,
     GroupManagement,
     ExpenseChart,
-    NaverMap
+    NaverMap,
+    MainMap
   },
   setup() {
     // 사용자 관련 로직 (Composable 사용)
@@ -505,16 +477,13 @@ export default {
       loading: restaurantLoading,
       selectedCategory,
       searchQuery,
-      selectedRestaurantDetail,
-      showRestaurantModal,
+      selectedRestaurant,
       foodCategories,
       filteredRestaurants,
       loadRestaurants,
-      viewDetails,
       selectCategory,
       searchRestaurants,
       selectRestaurant,
-      closeRestaurantModal,
       getCategoryName,
       getRestaurantEmoji
     } = useRestaurant();
@@ -550,24 +519,69 @@ export default {
       checkCurrentGroupExpenses
     } = useGroup();
 
+    // 모달에서 상태 저장 이벤트 처리
+    const handleStatusSave = (statusData) => {
+      console.log('🔍 handleStatusSave 호출:', statusData);
+      if (statusData && groupCalendarRef.value) {
+        console.log('📤 GroupCalendar에 저장 요청:', {
+          userId: statusData.member.id,
+          date: statusData.date,
+          status: statusData.status,
+          details: statusData.details
+        });
+        groupCalendarRef.value.saveMemberStatusToFirebase(
+          statusData.member.id,
+          statusData.date,
+          statusData.status,
+          statusData.details
+        ).then(() => {
+          console.log('✅ 상태 저장 완료');
+        }).catch((error) => {
+          console.error('❌ 상태 저장 실패:', error);
+        });
+      } else {
+        console.warn('⚠️ handleStatusSave: statusData 또는 groupCalendarRef가 없음');
+      }
+    };
+
     // 모달 관련 로직 (Composable 사용)
     const {
       showStatusModal,
       modalData,
       editingStatus,
       mealDetails,
+      vacationDetails,
+      otherDetails,
       dropdownOpen,
       statusOptions,
+      mealTypeOptions,
       modalFilteredRestaurants,
       openStatusModal,
       closeStatusModal,
+      saveStatus: originalSaveStatus,
       selectModalRestaurant,
       toggleDropdown,
       closeDropdown,
+      toggleParticipant,
+      isParticipantSelected,
+      handleInputFocus,
+      handleInputChange,
+      handleInputBlur,
       getMemberStatusClass,
       getMemberStatusText,
-      getStatusDetails
+      getStatusDetails,
+      // 음식점 검색 관련
+      restaurantSearchQuery,
+      restaurantSearchResults,
+      isSearchingRestaurant,
+      selectedRestaurant: modalSelectedRestaurant,
+      searchRestaurantByName,
+      selectRestaurantFromSearch,
+      clearRestaurantSearch
     } = useModal();
+    
+    // saveStatus를 handleStatusSave와 연결
+    const saveStatus = () => originalSaveStatus(handleStatusSave);
 
     // 위치 관련 로직 (Composable 사용)
     const {
@@ -607,20 +621,7 @@ export default {
     
     // 모달용 필터링된 음식점 목록은 useModal에서 관리
     
-    // 드롭다운 핸들러 함수들
-    const handleInputFocus = () => {
-      dropdownOpen.value = true;
-    };
-    
-    const handleInputChange = () => {
-      dropdownOpen.value = true;
-    };
-    
-    const handleInputBlur = () => {
-      setTimeout(() => {
-        dropdownOpen.value = false;
-      }, 200);
-    };
+    // 드롭다운 핸들러 함수들은 useModal에서 관리
     
     // 모달 관련 함수들은 useModal에서 관리
     
@@ -782,7 +783,6 @@ export default {
       currentGroup.value.proposals.push(proposal);
       
       console.log('제안 생성됨:', proposal);
-      closeRestaurantModal();
     };
     
     const selectForLunch = (restaurant) => {
@@ -830,12 +830,15 @@ export default {
     });
 
     // 컴포넌트 언마운트 시 리스너 정리
+    // refs
+    const groupCalendarRef = ref(null);
+
     // 모달 관련 함수들
     // statusOptions는 useModal에서 관리
 
     // 모달 관련 함수들은 useModal에서 관리
 
-    // saveStatus는 useModal에서 관리
+    // saveStatus는 useModal에서 관리하되, 실제 저장은 GroupCalendar에서 처리
 
     // getStatusDetails는 useModal에서 관리
 
@@ -953,19 +956,14 @@ export default {
       filteredRestaurants,
       selectedCategory,
       searchQuery,
-      selectedRestaurantDetail,
-      showRestaurantModal,
+      selectedRestaurant,
       foodCategories,
       loadRestaurants,
       selectCategory,
       searchRestaurants,
       selectRestaurant,
-      viewDetails,
-      closeRestaurantModal,
       getCategoryName,
       getRestaurantEmoji,
-      // selectedRestaurant는 useRestaurant에서 관리되지 않으므로 별도 추가
-      selectedRestaurant: ref(null),
       showGroupModal,
       monthlyExpenseData,
       selectedDateForProposal,
@@ -977,8 +975,6 @@ export default {
       searchRestaurants,
       selectCategory,
       selectRestaurant,
-      viewDetails,
-      closeRestaurantModal,
       openNaverMap,
       openKakaoMap,
       onDistanceCalculated,
@@ -996,6 +992,22 @@ export default {
       // loadMonthlyExpenseData, loadGroupMonthlyExpenseData, loadStatsData는 useExpense에서 관리
       handleLogout,
       // 모달 관련은 useModal에서 관리
+      showStatusModal,
+      modalData,
+      editingStatus,
+      mealDetails,
+      vacationDetails,
+      otherDetails,
+      dropdownOpen,
+      statusOptions,
+      mealTypeOptions,
+      openStatusModal,
+      closeStatusModal,
+      saveStatus,
+      toggleDropdown,
+      getMemberStatusClass,
+      getMemberStatusText,
+      getStatusDetails,
       handleStatusUpdated,
       expenseChart,
       modalFilteredRestaurants,
@@ -1003,7 +1015,11 @@ export default {
       handleInputChange,
       handleInputBlur,
       closeDropdown,
-      selectModalRestaurant
+      selectModalRestaurant,
+      toggleParticipant,
+      isParticipantSelected,
+      groupCalendarRef,
+      handleStatusSave
     };
   }
 };
@@ -1450,6 +1466,34 @@ export default {
   box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
 }
 
+
+/* 지도 섹션 스타일 */
+.map-section {
+  background: white;
+  border-radius: 1rem;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.section-header {
+  margin-bottom: 1.5rem;
+}
+
+.section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.section-subtitle {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
 .restaurant-image {
   width: 4rem;
   height: 4rem;
@@ -1479,6 +1523,18 @@ export default {
   font-size: 0.9rem;
   color: #6c757d;
   margin: 0 0 0.5rem 0;
+}
+
+.restaurant-emoji {
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 2px solid #e9ecef;
 }
 
 .restaurant-details {
@@ -1521,38 +1577,7 @@ export default {
   box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
 }
 
-/* 모달 스타일 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 1rem;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 1rem;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-  max-width: 500px;
-  width: 100%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-content.large {
-  max-width: 800px;
-}
-
-.modal-content.restaurant-detail {
-  max-width: 600px;
-}
+/* 모달 스타일 (중복 제거) */
 
 .modal-header {
   display: flex;
@@ -1652,12 +1677,6 @@ export default {
 }
 
 
-/* 음식점 상세보기 모달 */
-.restaurant-detail-content {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
 
 .restaurant-info-section {
   display: flex;
@@ -1666,8 +1685,8 @@ export default {
 }
 
 .restaurant-image-large {
-  width: 200px;
-  height: 150px;
+  width: 12.5rem;
+  height: 9.375rem;
   border-radius: 0.75rem;
   overflow: hidden;
   flex-shrink: 0;
@@ -1857,8 +1876,9 @@ export default {
   background: white;
   border-radius: 1rem;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  max-width: 48rem;
-  width: 100%;
+  max-width: 90vw;
+  width: auto;
+  min-width: 22rem;
   max-height: 85vh;
   overflow: hidden;
   animation: modalSlideIn 0.3s ease-out;
@@ -1910,7 +1930,7 @@ export default {
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: 2rem;
   flex: 1;
   overflow-y: auto;
   min-height: 0;
@@ -1918,17 +1938,17 @@ export default {
 
 /* 스크롤바 스타일 */
 .modal-body::-webkit-scrollbar {
-  width: 6px;
+  width: 0.375rem;
 }
 
 .modal-body::-webkit-scrollbar-track {
   background: #f1f1f1;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
 }
 
 .modal-body::-webkit-scrollbar-thumb {
   background: #c1c1c1;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
 }
 
 .modal-body::-webkit-scrollbar-thumb:hover {
@@ -1937,7 +1957,7 @@ export default {
 
 /* 모달 내부 컨텐츠 스타일 */
 .members-status-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .section-title {
@@ -1950,86 +1970,271 @@ export default {
   gap: 0.5rem;
 }
 
-.members-list {
+.members-status-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem;
   background: #f8f9fa;
   border: 1px solid #e9ecef;
   border-radius: 0.5rem;
-  padding: 1rem;
-  max-height: 15rem;
-  overflow-y: auto;
+  justify-content: center;
 }
 
-.member-item {
+.member-status-dot {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: white;
-  border-radius: 0.5rem;
-  margin-bottom: 0.5rem;
-  border: 1px solid #e9ecef;
+  justify-content: center;
+  font-weight: bold;
   transition: all 0.2s;
+  cursor: pointer;
+  border: 2px solid transparent;
+  padding: 0.25rem;
 }
 
-.member-item:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.member-status-dot.status-available {
+  background: #10b981;
+  color: white;
+  border-color: #059669;
 }
 
-.member-item:last-child {
-  margin-bottom: 0;
+.member-status-dot.status-unavailable {
+  background: #ef4444;
+  color: white;
+  border-color: #dc2626;
 }
 
-.member-avatar {
-  width: 2.5rem;
-  height: 2.5rem;
+.member-status-dot.status-unknown {
+  background: #6b7280;
+  color: white;
+  border-color: #4b5563;
+}
+
+.member-status-dot:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.member-name {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+}
+
+/* 식사 시간 선택 섹션 */
+.meal-type-section {
+  margin-top: 1.5rem;
+}
+
+.meal-type-options {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.meal-type-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f9fafb;
+  flex: 1;
+  justify-content: center;
+}
+
+.meal-type-option:hover {
+  border-color: var(--meal-color, #10b981);
+  background: rgba(16, 185, 129, 0.05);
+}
+
+.meal-type-option.selected {
+  border-color: var(--meal-color, #10b981);
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.meal-type-option input[type="radio"] {
+  display: none;
+}
+
+.meal-type-icon {
+  font-size: 1.25rem;
+}
+
+.meal-type-label {
+  font-weight: 500;
+  color: #374151;
+}
+
+.meal-type-option.selected .meal-type-label {
+  color: var(--meal-color, #10b981);
+  font-weight: 600;
+}
+
+/* 동료 선택 섹션 */
+.participants-section {
+  margin-top: 1.5rem;
+}
+
+.participants-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.participant-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+  min-width: fit-content;
+}
+
+.participant-item:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
+  transform: translateY(-1px);
+}
+
+.participant-item.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+
+.participant-avatar {
+  width: 1.5rem;
+  height: 1.5rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   font-weight: bold;
-  border: 2px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-size: 0.7rem;
+  flex-shrink: 0;
 }
 
-.member-info {
+.participant-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.participant-checkbox {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #d1d5db;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.participant-item.selected .participant-checkbox {
+  border-color: #3b82f6;
+  background: #3b82f6;
+}
+
+.check-icon {
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+/* 지출액 입력 섹션 */
+.expense-section {
+  margin-top: 1.5rem;
+}
+
+.expense-inputs {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.expense-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   flex: 1;
 }
 
-.member-name {
-  font-weight: 600;
-  color: #1f2937;
+.expense-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+  min-width: 2.5rem;
 }
 
-.member-status {
+.expense-input {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.expense-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.expense-unit {
   font-size: 0.9rem;
   color: #6b7280;
   font-weight: 500;
 }
 
+
 .section-divider {
-  height: 1px;
+  height: 0.0625rem;
   background: linear-gradient(90deg, transparent, #d1d5db, transparent);
   margin: 2rem 0;
 }
 
 .status-setting-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .status-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .status-option {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
   border: 2px solid #e5e7eb;
-  border-radius: 0.75rem;
+  border-radius: 0.5rem;
   cursor: pointer;
   transition: all 0.2s;
   background: white;
@@ -2212,6 +2417,34 @@ export default {
   margin-top: 0.5rem;
 }
 
+/* 외부인원 수 입력 섹션 */
+.external-members-section {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.external-members-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.external-members-input .expense-input {
+  width: 80px;
+}
+
+.external-members-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+  background: #f0f9ff;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  border-left: 3px solid #0ea5e9;
+}
+
 /* 모달 푸터 */
 .modal-footer {
   display: flex;
@@ -2362,7 +2595,7 @@ export default {
 
 /* ===== 새로운 음식점 상세보기 모달 스타일 ===== */
 .restaurant-detail-new {
-  max-width: 1200px;
+  max-width: 75rem;
   width: 95vw;
   max-height: 90vh;
   overflow: hidden;
@@ -2406,18 +2639,18 @@ export default {
 
 .restaurant-image-header img {
   width: 100%;
-  height: 200px;
+  height: 12.5rem;
   object-fit: cover;
 }
 
 .restaurant-emoji-image {
   width: 100%;
-  height: 200px;
+  height: 12.5rem;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  border-radius: 12px;
+  border-radius: 0.75rem;
   font-size: 4rem;
   border: 2px solid #e0e0e0;
 }
@@ -2482,7 +2715,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: 300px;
+  max-height: 18.75rem;
   overflow-y: auto;
 }
 
@@ -2540,7 +2773,7 @@ export default {
 
 /* 지도 카드 */
 .map-container {
-  height: 300px;
+  height: 18.75rem;
   border-radius: 0.75rem;
   overflow: hidden;
   border: 1px solid #e5e7eb;

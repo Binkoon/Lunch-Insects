@@ -6,6 +6,7 @@
 export const COLLECTIONS = {
   USERS: 'users',
   RESTAURANTS: 'restaurants', 
+  RESTAURANT_LOCATIONS: 'restaurantLocations', // 음식점 위치 캐싱
   SCHEDULES: 'schedules',
   GROUPS: 'groups',
   MEMBER_STATUS: 'memberStatus',

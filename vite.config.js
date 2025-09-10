@@ -16,15 +16,21 @@ export default defineConfig({
     },
   },
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
-      // 네이버 지도 API 프록시
-      '/api/naver': {
+      // 네이버 Maps API 프록시 (기존 API)
+      '/api/naver-maps': {
         target: 'https://naveropenapi.apigw.ntruss.com',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/naver/, ''),
-        headers: {
-          'X-NCP-APIGW-API-KEY-ID': process.env.VITE_NAVER_MAP_CLIENT_ID || '',
-          'X-NCP-APIGW-API-KEY': process.env.VITE_NAVER_MAP_CLIENT_SECRET || ''
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api\/naver-maps/, ''),
+        configure: (proxy, options) => {
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // 기존 API 인증 헤더
+            proxyReq.setHeader('X-NCP-APIGW-API-KEY-ID', process.env.VITE_NAVER_MAP_CLIENT_ID || '');
+            proxyReq.setHeader('X-NCP-APIGW-API-KEY', process.env.VITE_NAVER_MAP_CLIENT_SECRET || '');
+          });
         }
       }
     }
