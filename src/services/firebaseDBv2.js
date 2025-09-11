@@ -638,6 +638,124 @@ export const getUserMonthlyExpenses = async (userId, year, month) => {
 };
 
 /**
+ * 사용자 일별 소비 데이터 조회 (한 달 기준)
+ */
+export const getUserDailyExpenses = async (userId, year, month) => {
+  try {
+    // userId가 없으면 빈 배열 반환
+    if (!userId) {
+      return [];
+    }
+    
+    // year, month가 제공되지 않은 경우 현재 월 사용
+    const currentDate = new Date();
+    const targetYear = year || currentDate.getFullYear();
+    const targetMonth = month || (currentDate.getMonth() + 1);
+    
+    const startDate = new Date(targetYear, targetMonth - 1, 1);
+    const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
+    
+    const expensesQuery = query(
+      collection(db, COLLECTIONS.MENU_RECORDS),
+      where('userId', '==', userId),
+      where('date', '>=', startDate),
+      where('date', '<=', endDate),
+      orderBy('date', 'asc')
+    );
+    
+    const querySnapshot = await getDocs(expensesQuery);
+    const dailyExpenses = {};
+    
+    // 일별로 데이터 집계
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      const date = data.date.toDate();
+      const day = date.getDate();
+      
+      if (!dailyExpenses[day]) {
+        dailyExpenses[day] = {
+          ticketPoints: 0,
+          cash: 0,
+          total: 0
+        };
+      }
+      
+      if (data.paymentMethod === 'ticket') {
+        dailyExpenses[day].ticketPoints += data.amount || 0;
+      } else if (data.paymentMethod === 'cash') {
+        dailyExpenses[day].cash += data.amount || 0;
+      }
+      
+      dailyExpenses[day].total = dailyExpenses[day].ticketPoints + dailyExpenses[day].cash;
+    });
+    
+    // 해당 월의 모든 일에 대해 데이터 생성 (누적 계산)
+    const daysInMonth = endDate.getDate();
+    const result = [];
+    let cumulativeTicketPoints = 0;
+    let cumulativeCash = 0;
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayData = dailyExpenses[day] || { ticketPoints: 0, cash: 0, total: 0 };
+      cumulativeTicketPoints += dayData.ticketPoints;
+      cumulativeCash += dayData.cash;
+      
+      result.push({
+        day,
+        ticketPoints: dayData.ticketPoints,
+        cash: dayData.cash,
+        total: dayData.total,
+        cumulativeTicketPoints,
+        cumulativeCash,
+        cumulativeTotal: cumulativeTicketPoints + cumulativeCash
+      });
+    }
+    
+    return result;
+  } catch (error) {
+    console.warn('일별 지출 조회 실패, 빈 배열로 대체합니다:', error?.message || error);
+    return [];
+  }
+};
+
+/**
+ * 그룹 멤버들의 일별 소비 데이터 조회 (한 달 기준)
+ */
+export const getGroupDailyExpenses = async (groupId, year, month) => {
+  try {
+    if (!groupId) {
+      return {};
+    }
+    
+    // 그룹 멤버들 조회
+    const groupDoc = await getDoc(doc(db, COLLECTIONS.GROUPS, groupId));
+    if (!groupDoc.exists()) {
+      return {};
+    }
+    
+    const groupData = groupDoc.data();
+    const members = groupData.members || [];
+    
+    if (members.length === 0) {
+      return {};
+    }
+    
+    const groupDailyExpenses = {};
+    
+    // 각 멤버별로 일별 소비 데이터 조회
+    for (const memberId of members) {
+      const memberDailyExpenses = await getUserDailyExpenses(memberId, year, month);
+      groupDailyExpenses[memberId] = memberDailyExpenses;
+    }
+    
+    return groupDailyExpenses;
+  } catch (error) {
+    console.warn('그룹 일별 지출 조회 실패:', error?.message || error);
+    return {};
+  }
+};
+
+/**
  * 모든 사용자 조회
  */
 export const getAllUsers = async () => {

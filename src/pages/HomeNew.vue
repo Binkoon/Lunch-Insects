@@ -494,6 +494,8 @@ export default {
       monthlyExpenseData,
       statsData,
       expenseChart,
+      loadDailyExpenseData,
+      loadGroupDailyExpenseData,
       loadMonthlyExpenseData,
       loadGroupMonthlyExpenseData,
       loadStatsData: loadExpenseStatsData,
@@ -811,6 +813,15 @@ export default {
           await loadRestaurants();
           await loadStatsData(user.uid, currentGroup.value?.id);
           await loadMonthlyExpenseData(user.uid);
+          
+          // 일별 소비 데이터 로드 (현재 월)
+          const currentDate = new Date();
+          await loadDailyExpenseData(user.uid, currentDate.getFullYear(), currentDate.getMonth() + 1);
+          
+          // 그룹이 있으면 그룹 일별 소비 데이터도 로드
+          if (currentGroup.value?.id) {
+            await loadGroupDailyExpenseData(currentGroup.value.id, currentDate.getFullYear(), currentDate.getMonth() + 1);
+          }
         } else {
           console.log('인증 상태 변경 감지 - 로그아웃');
           // 로그아웃 시 추가 로직

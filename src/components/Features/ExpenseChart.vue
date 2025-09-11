@@ -42,10 +42,17 @@ export default {
       type: Object,
       default: () => ({
         personal: {
-          ticketPoints: [0, 0, 0, 0, 0, 0],
-          cash: [0, 0, 0, 0, 0, 0]
+          daily: [],
+          monthly: {
+            ticketPoints: 0,
+            cash: 0,
+            total: 0
+          }
         },
-        group: {}
+        group: {
+          daily: {},
+          monthly: {}
+        }
       })
     },
     groupId: {
@@ -68,15 +75,13 @@ export default {
       // 개인 소비 데이터에서 통계 계산
       const personalData = props.monthlyExpenseData.personal;
       
-      // 총 식권/현금 사용량 계산 (6개월 누적)
-      totalTicketPoints.value = sumArray(personalData.ticketPoints || []);
-      totalCash.value = sumArray(personalData.cash || []);
+      // 이번달 사용량 (월별 총합)
+      currentMonthTicketPoints.value = personalData.monthly?.ticketPoints || 0;
+      currentMonthCash.value = personalData.monthly?.cash || 0;
       
-      // 이번달 사용량 (배열의 마지막 값이 최신 월이라고 가정)
-      const ticketArray = personalData.ticketPoints || [];
-      const cashArray = personalData.cash || [];
-      currentMonthTicketPoints.value = ticketArray[ticketArray.length - 1] || 0;
-      currentMonthCash.value = cashArray[cashArray.length - 1] || 0;
+      // 총 사용량 (현재는 이번달과 동일, 추후 여러 달 데이터로 확장 가능)
+      totalTicketPoints.value = currentMonthTicketPoints.value;
+      totalCash.value = currentMonthCash.value;
     };
 
     const sumArray = (arr) => {

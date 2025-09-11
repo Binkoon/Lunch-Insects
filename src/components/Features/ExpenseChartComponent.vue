@@ -58,10 +58,17 @@ export default {
       type: Object,
       default: () => ({
         personal: {
-          ticketPoints: [0, 0, 0, 0, 0, 0],
-          cash: [0, 0, 0, 0, 0, 0]
+          daily: [],
+          monthly: {
+            ticketPoints: 0,
+            cash: 0,
+            total: 0
+          }
         },
-        group: {}
+        group: {
+          daily: {},
+          monthly: {}
+        }
       })
     }
   },
@@ -124,48 +131,70 @@ export default {
 
     const getChartData = () => {
       if (selectedChartType.value === 'personal') {
-        // 개인 소비 - 꺾은선 그래프
-        const data = props.monthlyExpenseData.personal;
+        // 개인 소비 - 일별 누적 꺾은선 그래프
+        const dailyData = props.monthlyExpenseData.personal.daily || [];
+        
+        if (dailyData.length === 0) {
+          return {
+            type: 'line',
+            data: {
+              labels: ['데이터 없음'],
+              datasets: [{
+                label: '데이터 없음',
+                data: [0],
+                borderColor: 'rgba(200, 200, 200, 0.5)',
+                backgroundColor: 'rgba(200, 200, 200, 0.1)'
+              }]
+            },
+            options: {
+              ...CHART_OPTIONS,
+              plugins: {
+                ...CHART_OPTIONS.plugins,
+                title: {
+                  display: true,
+                  text: '개인 일별 누적 소비 (이번 달)',
+                  font: { size: 16, weight: 'bold' }
+                }
+              }
+            }
+          };
+        }
+        
+        // 일별 라벨 생성 (1일부터 해당 월의 마지막 일까지)
+        const labels = dailyData.map(day => `${day.day}일`);
+        
         return {
           type: 'line',
           data: {
-            labels: generateLabelsFromData(data),
+            labels,
             datasets: [
               {
-                label: '식권포인트',
-                data: generateLabelsFromData(data).map(label => {
-                  const quarter = label.includes('Q1') ? 'Q1' : 
-                                label.includes('Q2') ? 'Q2' : 
-                                label.includes('Q3') ? 'Q3' : 'Q4';
-                  return data[quarter]?.ticketPoints || 0;
-                }),
-                borderColor: CHART_COLORS.ticket,
+                label: '식권포인트 (누적)',
+                data: dailyData.map(day => day.cumulativeTicketPoints),
+                borderColor: '#3b82f6',
                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                 tension: 0.4,
-                fill: true,
-                pointRadius: 6,
-                pointHoverRadius: 8,
-                pointBackgroundColor: CHART_COLORS.ticket,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#3b82f6',
                 pointBorderColor: '#ffffff',
-                pointBorderWidth: 2
+                pointBorderWidth: 2,
+                borderWidth: 3
               },
               {
-                label: '현금',
-                data: generateLabelsFromData(data).map(label => {
-                  const quarter = label.includes('Q1') ? 'Q1' : 
-                                label.includes('Q2') ? 'Q2' : 
-                                label.includes('Q3') ? 'Q3' : 'Q4';
-                  return data[quarter]?.cash || 0;
-                }),
-                borderColor: CHART_COLORS.cash,
+                label: '현금 (누적)',
+                data: dailyData.map(day => day.cumulativeCash),
+                borderColor: '#4ecdc4',
                 backgroundColor: 'rgba(78, 205, 196, 0.1)',
                 tension: 0.4,
-                fill: true,
-                pointRadius: 6,
-                pointHoverRadius: 8,
-                pointBackgroundColor: CHART_COLORS.cash,
+                fill: false,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#4ecdc4',
                 pointBorderColor: '#ffffff',
-                pointBorderWidth: 2
+                pointBorderWidth: 2,
+                borderWidth: 3
               }
             ]
           },
@@ -175,30 +204,62 @@ export default {
               ...CHART_OPTIONS.plugins,
               title: {
                 display: true,
-                text: '개인 월별 소비 추이',
+                text: '개인 일별 누적 소비 (이번 달)',
                 font: { size: 16, weight: 'bold' }
+              },
+              legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                  usePointStyle: true,
+                  padding: 20
+                }
               }
             },
             scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: '일 (DAY)',
+                  font: { size: 14, weight: 'bold' }
+                },
+                grid: {
+                  display: true,
+                  color: 'rgba(0, 0, 0, 0.1)'
+                }
+              },
               y: {
                 beginAtZero: true,
+                min: 0,
+                title: {
+                  display: true,
+                  text: '금액 (원)',
+                  font: { size: 14, weight: 'bold' }
+                },
                 ticks: {
+                  stepSize: 50000,
                   callback: function(value) {
                     return value.toLocaleString() + '원';
                   }
+                },
+                grid: {
+                  display: true,
+                  color: 'rgba(0, 0, 0, 0.1)'
                 }
               }
+            },
+            interaction: {
+              intersect: false,
+              mode: 'index'
             }
           }
         };
       } else {
-        // 그룹 소비 - 막대 그래프
-        const groupData = props.monthlyExpenseData.group;
-        const memberNames = Object.keys(groupData);
+        // 그룹 소비 - 멤버별 막대 그래프
+        const groupMonthlyData = props.monthlyExpenseData.group.monthly || {};
+        const memberIds = Object.keys(groupMonthlyData);
         
-        console.log('🔍 그룹 소비 데이터:', { groupData, memberNames });
-        
-        if (memberNames.length === 0) {
+        if (memberIds.length === 0) {
           return {
             type: 'bar',
             data: {
@@ -215,7 +276,7 @@ export default {
                 ...CHART_OPTIONS.plugins,
                 title: {
                   display: true,
-                  text: '그룹 멤버별 총 소비',
+                  text: '그룹 멤버별 월별 소비',
                   font: { size: 16, weight: 'bold' }
                 }
               }
@@ -223,8 +284,10 @@ export default {
           };
         }
         
-        const ticketTotals = memberNames.map(name => sumArray(groupData[name]?.ticketPoints || []));
-        const cashTotals = memberNames.map(name => sumArray(groupData[name]?.cash || []));
+        // 멤버 이름을 가져오기 위해 임시로 UID 사용 (실제로는 useCalendar에서 가져온 멤버 정보 사용)
+        const memberNames = memberIds.map(id => `사용자 ${id.slice(-4)}`);
+        const ticketTotals = memberIds.map(id => groupMonthlyData[id]?.ticketPoints || 0);
+        const cashTotals = memberIds.map(id => groupMonthlyData[id]?.cash || 0);
         
         return {
           type: 'bar',
@@ -234,18 +297,18 @@ export default {
               {
                 label: '식권포인트',
                 data: ticketTotals,
-                backgroundColor: 'rgba(59, 130, 246, 0.6)',
-                borderColor: CHART_COLORS.ticket,
-                borderWidth: 1,
+                backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                borderColor: '#3b82f6',
+                borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false
               },
               {
                 label: '현금',
                 data: cashTotals,
-                backgroundColor: 'rgba(78, 205, 196, 0.6)',
-                borderColor: CHART_COLORS.cash,
-                borderWidth: 1,
+                backgroundColor: 'rgba(78, 205, 196, 0.8)',
+                borderColor: '#4ecdc4',
+                borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false
               }
@@ -257,19 +320,53 @@ export default {
               ...CHART_OPTIONS.plugins,
               title: {
                 display: true,
-                text: '그룹 멤버별 총 소비 (6개월 누적)',
+                text: '그룹 멤버별 월별 소비 (이번 달)',
                 font: { size: 16, weight: 'bold' }
+              },
+              legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                  usePointStyle: true,
+                  padding: 20
+                }
               }
             },
             scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: '그룹 멤버',
+                  font: { size: 14, weight: 'bold' }
+                },
+                grid: {
+                  display: true,
+                  color: 'rgba(0, 0, 0, 0.1)'
+                }
+              },
               y: {
                 beginAtZero: true,
+                min: 0,
+                title: {
+                  display: true,
+                  text: '금액 (원)',
+                  font: { size: 14, weight: 'bold' }
+                },
                 ticks: {
+                  stepSize: 50000,
                   callback: function(value) {
                     return value.toLocaleString() + '원';
                   }
+                },
+                grid: {
+                  display: true,
+                  color: 'rgba(0, 0, 0, 0.1)'
                 }
               }
+            },
+            interaction: {
+              intersect: false,
+              mode: 'index'
             }
           }
         };

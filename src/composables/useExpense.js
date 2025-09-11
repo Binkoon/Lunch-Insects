@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue';
-import { getUserMonthlyExpenses, getGroupMembersMonthlyExpenses } from '@/services/firebaseDBv2.js';
+import { getUserMonthlyExpenses, getGroupMembersMonthlyExpenses, getUserDailyExpenses, getGroupDailyExpenses } from '@/services/firebaseDBv2.js';
 
 /**
  * 지출 관련 비즈니스 로직을 관리하는 Composable
@@ -10,11 +10,17 @@ export const useExpense = () => {
   const loading = ref(false);
   const monthlyExpenseData = ref({
     personal: {
-      ticketPoints: 0,
-      cash: 0,
-      total: 0
+      daily: [], // 일별 데이터 (누적)
+      monthly: {
+        ticketPoints: 0,
+        cash: 0,
+        total: 0
+      }
     },
-    group: {}
+    group: {
+      daily: {}, // 멤버별 일별 데이터
+      monthly: {} // 멤버별 월별 데이터
+    }
   });
   const statsData = ref({
     totalVisits: 0,
@@ -24,7 +30,54 @@ export const useExpense = () => {
   });
   const expenseChart = ref(null);
 
-  // 월별 지출 데이터 로드 (개인)
+  // 일별 지출 데이터 로드 (개인)
+  const loadDailyExpenseData = async (userId, year, month) => {
+    if (!userId || userId === 'guest') {
+      console.log('게스트 사용자 - 일별 지출 데이터 로드 스킵');
+      return;
+    }
+
+    try {
+      loading.value = true;
+      console.log('개인 일별 지출 데이터 로드 시작...');
+      
+      // Firebase에서 일별 지출 데이터 가져오기
+      const dailyExpenses = await getUserDailyExpenses(userId, year, month);
+      
+      monthlyExpenseData.value.personal.daily = dailyExpenses;
+      
+      // 월별 총합 계산
+      if (dailyExpenses.length > 0) {
+        const lastDay = dailyExpenses[dailyExpenses.length - 1];
+        monthlyExpenseData.value.personal.monthly = {
+          ticketPoints: lastDay.cumulativeTicketPoints,
+          cash: lastDay.cumulativeCash,
+          total: lastDay.cumulativeTotal
+        };
+      } else {
+        monthlyExpenseData.value.personal.monthly = {
+          ticketPoints: 0,
+          cash: 0,
+          total: 0
+        };
+      }
+      
+      console.log('개인 일별 지출 데이터 로드 완료:', monthlyExpenseData.value.personal);
+    } catch (error) {
+      console.error('개인 일별 지출 데이터 로드 실패:', error);
+      // 오류 시 기본값 설정
+      monthlyExpenseData.value.personal.daily = [];
+      monthlyExpenseData.value.personal.monthly = {
+        ticketPoints: 0,
+        cash: 0,
+        total: 0
+      };
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  // 월별 지출 데이터 로드 (개인) - 기존 함수 유지 (호환성)
   const loadMonthlyExpenseData = async (userId) => {
     if (!userId || userId === 'guest') {
       console.log('게스트 사용자 - 지출 데이터 로드 스킵');
@@ -92,7 +145,56 @@ export const useExpense = () => {
     return quarters;
   };
 
-  // 월별 지출 데이터 로드 (그룹)
+  // 일별 지출 데이터 로드 (그룹)
+  const loadGroupDailyExpenseData = async (groupId, year, month) => {
+    if (!groupId) {
+      console.log('그룹 ID 없음 - 그룹 일별 지출 데이터 로드 스킵');
+      monthlyExpenseData.value.group.daily = {};
+      monthlyExpenseData.value.group.monthly = {};
+      return;
+    }
+
+    try {
+      loading.value = true;
+      console.log('그룹 일별 지출 데이터 로드 시작...');
+      
+      // Firebase에서 그룹 일별 지출 데이터 가져오기
+      const groupDailyData = await getGroupDailyExpenses(groupId, year, month);
+      
+      monthlyExpenseData.value.group.daily = groupDailyData;
+      
+      // 각 멤버별 월별 총합 계산
+      const groupMonthlyData = {};
+      Object.keys(groupDailyData).forEach(memberId => {
+        const memberDailyData = groupDailyData[memberId];
+        if (memberDailyData.length > 0) {
+          const lastDay = memberDailyData[memberDailyData.length - 1];
+          groupMonthlyData[memberId] = {
+            ticketPoints: lastDay.cumulativeTicketPoints,
+            cash: lastDay.cumulativeCash,
+            total: lastDay.cumulativeTotal
+          };
+        } else {
+          groupMonthlyData[memberId] = {
+            ticketPoints: 0,
+            cash: 0,
+            total: 0
+          };
+        }
+      });
+      
+      monthlyExpenseData.value.group.monthly = groupMonthlyData;
+      console.log('그룹 일별 지출 데이터 로드 완료:', monthlyExpenseData.value.group);
+    } catch (error) {
+      console.error('그룹 일별 지출 데이터 로드 실패:', error);
+      monthlyExpenseData.value.group.daily = {};
+      monthlyExpenseData.value.group.monthly = {};
+    } finally {
+      loading.value = false;
+    }
+  };
+
+  // 월별 지출 데이터 로드 (그룹) - 기존 함수 유지 (호환성)
   const loadGroupMonthlyExpenseData = async (groupId) => {
     if (!groupId) {
       console.log('그룹 ID 없음 - 그룹 지출 데이터 로드 스킵');
@@ -189,6 +291,8 @@ export const useExpense = () => {
     expenseChart,
     
     // 메서드
+    loadDailyExpenseData,
+    loadGroupDailyExpenseData,
     loadMonthlyExpenseData,
     loadGroupMonthlyExpenseData,
     loadStatsData,
