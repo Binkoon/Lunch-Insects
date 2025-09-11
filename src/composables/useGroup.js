@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue';
-import { getGroup, updateGroup, getUserGroups } from '@/services/firebaseDBv2.js';
+import { getGroup, updateGroup, getUserGroups, getUser } from '@/services/firebaseDBv2.js';
 
 /**
  * 그룹 관련 비즈니스 로직을 관리하는 Composable
@@ -18,7 +18,7 @@ export const useGroup = () => {
     return currentGroup.value.members.map(member => {
       return {
         id: member,
-        name: `사용자 ${member.slice(-4)}`, // 임시 이름
+        // name은 loadMemberNames에서 처리하므로 여기서는 생성하지 않음
         status: 'unknown' // 기본 상태
       };
     });

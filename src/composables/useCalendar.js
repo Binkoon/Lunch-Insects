@@ -290,16 +290,21 @@ export const useCalendar = (props, emit) => {
   // 데이터 로드 함수들
   const loadMemberNames = async (members) => {
     try {
-      console.log('loadMemberNames 호출됨, members:', members);
       if (!members || members.length === 0) {
-        console.log('멤버가 없어서 빈 배열 반환');
         actualMembers.value = [];
         return;
       }
 
-      const memberPromises = members.map(async (member) => {
-        // 이미 객체 형태이고 이름이 있는 경우
-        if (typeof member === 'object' && member.name) {
+      // 이미 로딩 중이면 무시
+      if (loading.value) {
+        return;
+      }
+
+      loading.value = true;
+
+      const memberPromises = members.map(async (member, index) => {
+        // 이미 객체 형태이고 이름이 있는 경우 (실제 Firebase 데이터인지 확인)
+        if (typeof member === 'object' && member.name && !member.name.startsWith('사용자 ')) {
           const memberId = member.id || member.uid || member.userId || member;
           return {
             id: memberId,
@@ -312,37 +317,61 @@ export const useCalendar = (props, emit) => {
         const memberId = typeof member === 'string' ? member : (member.id || member.uid || member.userId);
         
         try {
-          // getUser 함수를 사용하여 사용자 정보 가져오기
-          console.log(`사용자 ${memberId} 정보 가져오기 시도...`);
           const userData = await getUser(memberId);
-          console.log(`사용자 ${memberId} 정보:`, userData);
           
-          if (userData && userData.success) {
+          if (userData && userData.success && userData.data) {
             const userName = userData.data.name || userData.data.displayName || `사용자 ${String(memberId).slice(-4)}`;
-            console.log(`사용자 ${memberId} 이름:`, userName);
             return {
               id: memberId,
               name: userName,
               color: `#${Math.floor(Math.random()*16777215).toString(16)}`
             };
+          } else {
+            // 사용자가 존재하지 않는 경우 기본 사용자 정보 생성
+            try {
+              const { createUser } = await import('@/services/firebaseDBv2.js');
+              const shortId = String(memberId).slice(-4);
+              const defaultName = `사용자${shortId}`;
+              
+              await createUser({
+                uid: memberId,
+                name: defaultName,
+                displayName: defaultName,
+                email: `${memberId}@temp.com`,
+                createdAt: new Date(),
+                lastActiveAt: new Date()
+              });
+              
+              return {
+                id: memberId,
+                name: defaultName,
+                color: `#${Math.floor(Math.random()*16777215).toString(16)}`
+              };
+            } catch (createError) {
+              console.warn(`사용자 ${memberId} 기본 정보 생성 실패:`, createError);
+            }
           }
         } catch (error) {
           console.warn(`사용자 ${memberId} 정보 가져오기 실패:`, error);
         }
 
         // Firebase에서 가져오기 실패한 경우 기본값 사용
+        const shortId = String(memberId).slice(-4);
+        const userName = `사용자${shortId}`;
+        
         return {
           id: memberId,
-          name: `사용자 ${String(memberId).slice(-4)}`,
+          name: userName,
           color: `#${Math.floor(Math.random()*16777215).toString(16)}`
         };
       });
 
       actualMembers.value = await Promise.all(memberPromises);
-      console.log('캘린더 멤버 이름 로드 완료:', actualMembers.value);
     } catch (error) {
       console.error('멤버 이름 로드 실패:', error);
       actualMembers.value = [];
+    } finally {
+      loading.value = false;
     }
   };
 
@@ -358,8 +387,15 @@ export const useCalendar = (props, emit) => {
     }
   };
 
-  // 월 변경 감지
-  watch(currentDate, async (newDate) => {
+  // 월 변경 감지 (무한 루프 방지를 위해 immediate: false)
+  watch(currentDate, async (newDate, oldDate) => {
+    // 같은 월이면 무시
+    if (oldDate && 
+        newDate.getFullYear() === oldDate.getFullYear() && 
+        newDate.getMonth() === oldDate.getMonth()) {
+      return;
+    }
+    
     const year = newDate.getFullYear();
     const month = newDate.getMonth();
     
@@ -371,12 +407,32 @@ export const useCalendar = (props, emit) => {
     
     // 멤버 상태 로드
     await loadMemberStatuses(startDate, endDate);
-  });
+  }, { immediate: false });
 
   // 멤버 상태 로드 (외부에서 호출)
   const loadMemberStatuses = async (startDate, endDate) => {
-    // Firebase에서 멤버 상태 로드
-    console.log('멤버 상태 로드:', { startDate, endDate });
+    try {
+      console.log('멤버 상태 로드:', { startDate, endDate, groupId: props.groupId });
+      
+      if (!props.groupId) {
+        console.warn('groupId가 없어서 멤버 상태를 로드할 수 없습니다.');
+        return;
+      }
+
+      const { getGroupMemberStatuses } = await import('@/services/firebaseDBv2.js');
+      const result = await getGroupMemberStatuses(props.groupId, startDate, endDate);
+      
+      if (result && result.success) {
+        memberStatuses.value = result.data || {};
+        console.log('멤버 상태 로드 완료:', memberStatuses.value);
+      } else {
+        console.warn('멤버 상태 로드 실패:', result);
+        memberStatuses.value = {};
+      }
+    } catch (error) {
+      console.error('멤버 상태 로드 중 오류:', error);
+      memberStatuses.value = {};
+    }
   };
 
   // 누락된 함수들 추가
@@ -554,32 +610,60 @@ export const useCalendar = (props, emit) => {
     return members;
   };
 
+  // 현재 사용자 로드
+  const loadCurrentUser = async () => {
+    try {
+      const user = await getCurrentUser();
+      currentUser.value = user;
+      console.log('현재 사용자 로드 완료:', user);
+    } catch (error) {
+      console.error('현재 사용자 로드 실패:', error);
+      currentUser.value = null;
+    }
+  };
+
   // 생명주기 훅
   onMounted(async () => {
-    console.log('useCalendar onMounted');
+    // 현재 사용자 로드
+    await loadCurrentUser();
+    
     if (props.groupId) {
       await loadMemberNames(props.members);
       await loadRestaurants();
-      await loadMemberStatuses();
+      
+      // 현재 월의 날짜 범위로 멤버 상태 로드
+      const year = currentDate.value.getFullYear();
+      const month = currentDate.value.getMonth();
+      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
+      
+      await loadMemberStatuses(startDate, endDate);
     }
   });
 
-  // props 변경 감지
-  watch(() => props.groupId, async (newGroupId) => {
-    if (newGroupId) {
+  // props 변경 감지 (무한 루프 방지)
+  watch(() => props.groupId, async (newGroupId, oldGroupId) => {
+    if (newGroupId && newGroupId !== oldGroupId) {
       console.log('groupId 변경 감지:', newGroupId);
       await loadMemberNames(props.members);
       await loadRestaurants();
-      await loadMemberStatuses();
+      
+      // 현재 월의 날짜 범위로 멤버 상태 로드
+      const year = currentDate.value.getFullYear();
+      const month = currentDate.value.getMonth();
+      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${new Date(year, month + 1, 0).getDate()}`;
+      
+      await loadMemberStatuses(startDate, endDate);
     }
-  });
+  }, { immediate: false });
 
-  watch(() => props.members, async (newMembers) => {
-    if (newMembers && newMembers.length > 0) {
+  watch(() => props.members, async (newMembers, oldMembers) => {
+    if (newMembers && newMembers.length > 0 && newMembers !== oldMembers) {
       console.log('members 변경 감지:', newMembers);
       await loadMemberNames(newMembers);
     }
-  });
+  }, { immediate: false });
 
   return {
     // 상태
@@ -642,6 +726,7 @@ export const useCalendar = (props, emit) => {
     loadMemberStatuses,
     loadGroupData,
     loadProposals,
+    loadCurrentUser,
     
     // 저장/삭제 함수
     saveMemberStatusToFirebase,

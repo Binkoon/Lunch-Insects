@@ -144,11 +144,27 @@ export default {
     actualMembers: {
       type: Array,
       default: () => []
+    },
+    restaurants: {
+      type: Array,
+      default: () => []
+    },
+    currentUser: {
+      type: Object,
+      default: null
     }
   },
   emits: [
     'day-click',
-    'restaurant-click'
+    'restaurant-click',
+    'proposal-click',
+    'proposal-accept',
+    'proposal-reject',
+    'proposal-create',
+    'proposal-delete',
+    'proposal-moved',
+    'drag-start',
+    'drag-end'
   ],
   setup(props, { emit }) {
     // 이벤트 핸들러
@@ -168,6 +184,39 @@ export default {
       }
     };
 
+    // 제안 관련 이벤트 핸들러들
+    const handleProposalClick = (proposal) => {
+      emit('proposal-click', proposal);
+    };
+
+    const handleProposalAccept = (proposal) => {
+      emit('proposal-accept', proposal);
+    };
+
+    const handleProposalReject = (proposal) => {
+      emit('proposal-reject', proposal);
+    };
+
+    const handleProposalCreate = (proposal) => {
+      emit('proposal-create', proposal);
+    };
+
+    const handleProposalDelete = (proposal) => {
+      emit('proposal-delete', proposal);
+    };
+
+    const handleProposalMoved = (proposal, newDate) => {
+      emit('proposal-moved', proposal, newDate);
+    };
+
+    const handleDragStart = (proposal) => {
+      emit('drag-start', proposal);
+    };
+
+    const handleDragEnd = () => {
+      emit('drag-end');
+    };
+
     // memberStatuses 변경 감지 (무한 루프 방지를 위해 제거)
     // watch(() => props.memberStatuses, (newStatuses, oldStatuses) => {
     //   console.log('🔄 memberStatuses 변경 감지:', { newStatuses, oldStatuses });
@@ -177,7 +226,7 @@ export default {
     // 선택된 음식점들 가져오기 (점심/저녁 구분 포함)
     const getSelectedRestaurantsForDay = (date) => {
       const dayStatuses = props.memberStatuses[date] || {};
-      console.log('🔍 getSelectedRestaurantsForDay:', { date, dayStatuses });
+      console.log('🔍 getSelectedRestaurantsForDay:', { date, dayStatuses, actualMembers: props.actualMembers });
       const restaurantMap = new Map();
       
       Object.entries(dayStatuses).forEach(([memberId, status]) => {
@@ -206,11 +255,15 @@ export default {
                 externalMembers: status.details.externalMembers || 0
               });
             }
+          } else {
+            console.warn('멤버를 찾을 수 없음:', { memberId, actualMembers: props.actualMembers });
           }
         }
       });
       
-      return Array.from(restaurantMap.values());
+      const result = Array.from(restaurantMap.values());
+      console.log('🔍 최종 결과:', result);
+      return result;
     };
 
     // 확정된 메뉴 가져오기
@@ -256,6 +309,14 @@ export default {
       handleDayClick,
       handleRestaurantClick,
       handleAllRestaurantsClick,
+      handleProposalClick,
+      handleProposalAccept,
+      handleProposalReject,
+      handleProposalCreate,
+      handleProposalDelete,
+      handleProposalMoved,
+      handleDragStart,
+      handleDragEnd,
       getSelectedRestaurantsForDay,
       getConfirmedMealForDay,
       getProposalsForDay,

@@ -358,20 +358,32 @@ export default {
           try {
             // getUser 함수를 사용하여 실제 사용자 정보 가져오기
             const userData = await getUser(memberId);
-            return {
-              id: memberId,
-              name: userData?.name || `사용자 ${memberId.slice(-4)}`,
-              email: userData?.email || `user${memberId.slice(-4)}@example.com`,
-              avatar: userData?.avatar || null,
-              lastActiveAt: userData?.lastActiveAt || null
-            };
+            if (userData && userData.success && userData.data) {
+              const user = userData.data;
+              return {
+                id: memberId,
+                name: user.name || `사용자 ${memberId.slice(-4)}`,
+                email: user.email || `user${memberId.slice(-4)}@temp.com`,
+                avatar: user.avatar || null,
+                lastActiveAt: user.lastActiveAt || null
+              };
+            } else {
+              // 사용자 정보를 가져올 수 없는 경우 기본값 사용
+              return {
+                id: memberId,
+                name: `사용자 ${memberId.slice(-4)}`,
+                email: `user${memberId.slice(-4)}@temp.com`,
+                avatar: null,
+                lastActiveAt: null
+              };
+            }
           } catch (error) {
             console.error(`사용자 ${memberId} 정보 로드 실패:`, error);
             // 사용자 정보를 가져올 수 없는 경우 기본값 사용
             return {
               id: memberId,
               name: `사용자 ${memberId.slice(-4)}`,
-              email: `user${memberId.slice(-4)}@example.com`,
+              email: `user${memberId.slice(-4)}@temp.com`,
               avatar: null,
               lastActiveAt: null
             };

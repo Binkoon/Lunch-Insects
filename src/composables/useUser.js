@@ -56,33 +56,26 @@ export const useUser = () => {
   // 인증된 사용자 데이터 로드
   const loadUserDataFromAuth = async (authUser) => {
     try {
-      if (import.meta.env.DEV) {
-        console.log('인증된 사용자 데이터 로드 시작:', authUser.email)
-      }
-
       // Firestore에서 사용자 데이터 조회
       const userData = await getUser(authUser.uid)
       
-      if (userData) {
+      if (userData && userData.success && userData.data) {
+        const user = userData.data;
         currentUser.value = {
-          id: userData.id,
-          name: userData.name || '사용자',
+          id: user.id,
+          name: user.name || '사용자',
           email: authUser.email,
-          avatar: userData.avatar || null,
-          expenses: userData.expenses || {
+          avatar: user.avatar || null,
+          expenses: user.expenses || {
             ticketPoints: 0,
             cash: 0
           },
-          location: userData.location || {
+          location: user.location || {
             name: '',
             address: '',
             lat: null,
             lng: null
           }
-        }
-        
-        if (import.meta.env.DEV) {
-          console.log('Firestore 데이터로 사용자 설정 완료:', currentUser.value)
         }
       } else {
         // Firestore에 사용자 데이터가 없는 경우 기본값 사용
@@ -91,14 +84,6 @@ export const useUser = () => {
           id: authUser.uid,
           email: authUser.email
         }
-        
-        if (import.meta.env.DEV) {
-          console.log('기본값으로 사용자 설정 완료:', currentUser.value)
-        }
-      }
-      
-      if (import.meta.env.DEV) {
-        console.log('사용자 데이터 로드 완료:', currentUser.value.name)
       }
       
       // 이번달 지출액 로드
@@ -118,9 +103,6 @@ export const useUser = () => {
       if (authUser) {
         await loadUserDataFromAuth(authUser)
       } else {
-        if (import.meta.env.DEV) {
-          console.log('로그인되지 않은 상태입니다.')
-        }
         currentUser.value = null
       }
     } catch (error) {
@@ -133,10 +115,6 @@ export const useUser = () => {
   const loadMonthlyExpenses = async () => {
     try {
       if (currentUser.value.id && currentUser.value.id !== 'guest') {
-        if (import.meta.env.DEV) {
-          console.log('이번달 지출액 로드 시작...')
-        }
-        
         // 이번달 지출액 조회
         const expenses = await getUserMonthlyExpenses(currentUser.value.id)
         
@@ -152,10 +130,6 @@ export const useUser = () => {
             cash: 0,
             lastUpdated: new Date()
           }
-        }
-        
-        if (import.meta.env.DEV) {
-          console.log('이번달 지출액 로드 완료:', currentUser.value.expenses)
         }
       }
     } catch (error) {
@@ -184,9 +158,6 @@ export const useUser = () => {
       if (currentUser.value?.id) {
         await updateUser(currentUser.value.id, userData)
         currentUser.value = { ...currentUser.value, ...userData }
-        if (import.meta.env.DEV) {
-          console.log('사용자 정보 업데이트 완료:', userData)
-        }
       }
     } catch (error) {
       console.error('사용자 정보 업데이트 실패:', error)
@@ -197,9 +168,6 @@ export const useUser = () => {
   const logout = async () => {
     try {
       currentUser.value = null
-      if (import.meta.env.DEV) {
-        console.log('사용자 로그아웃 완료')
-      }
     } catch (error) {
       console.error('로그아웃 실패:', error)
     }

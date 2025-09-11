@@ -29,13 +29,15 @@ import { COLLECTIONS } from '../config/collections.js';
  */
 export const createUser = async (userData) => {
   try {
-    const userRef = await addDoc(collection(db, COLLECTIONS.USERS), {
+    // Firebase Auth UID를 문서 ID로 사용
+    const userRef = doc(db, COLLECTIONS.USERS, userData.uid);
+    await setDoc(userRef, {
       ...userData,
       createdAt: serverTimestamp(),
       lastActiveAt: serverTimestamp()
     });
-    console.log('사용자 생성 성공:', userRef.id);
-    return userRef.id;
+    console.log('사용자 생성 성공:', userData.uid);
+    return userData.uid;
   } catch (error) {
     console.error('사용자 생성 실패:', error);
     throw error;
@@ -49,19 +51,23 @@ export const getUser = async (userIdOrEmail) => {
   try {
     // email인지 확인 (이메일 형식 체크)
     if (userIdOrEmail.includes('@')) {
-      return await getUserByEmail(userIdOrEmail);
+      const result = await getUserByEmail(userIdOrEmail);
+      return result ? { success: true, data: result } : { success: false, error: '사용자를 찾을 수 없습니다.' };
     }
     
     // Firebase Auth UID로 직접 문서 조회 (이제 문서 ID가 Auth UID와 일치)
     const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, userIdOrEmail));
     if (userDoc.exists()) {
-      return { id: userDoc.id, ...userDoc.data() };
+      return { 
+        success: true, 
+        data: { id: userDoc.id, ...userDoc.data() } 
+      };
     }
     
-    return null;
+    return { success: false, error: '사용자를 찾을 수 없습니다.' };
   } catch (error) {
     console.error('사용자 조회 실패:', error);
-    throw error;
+    return { success: false, error: error.message };
   }
 };
 
